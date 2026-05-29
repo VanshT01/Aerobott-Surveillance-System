@@ -66,23 +66,6 @@ def get_camera_credentials(db: Session, device_id: int):
         .first()
     )
 
-def update_device_status(
-    db,
-    device_id,
-    status
-):
-    device = get_device(db, device_id)
-
-    if not device:
-        return None
-
-    device.status = status
-
-    db.commit()
-    db.refresh(device)
-
-    return device
-
 def update_device_status(db: Session, device_id: int, status: models.DeviceStatus):
     device = get_device(db, device_id)
 
