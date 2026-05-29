@@ -77,3 +77,38 @@ def update_device_status(db: Session, device_id: int, status: models.DeviceStatu
     db.refresh(device)
 
     return device
+
+def create_recording(db: Session, camera_id: int, start_time, end_time, path: str):
+    recording = models.Recording(
+        camera_id=camera_id,
+        start_time=start_time,
+        end_time=end_time,
+        path=path
+    )
+
+    db.add(recording)
+    db.commit()
+    db.refresh(recording)
+
+    return recording
+
+
+def get_recordings(db: Session, camera_id: int | None = None):
+    query = db.query(models.Recording)
+
+    if camera_id is not None:
+        query = query.filter(models.Recording.camera_id == camera_id)
+
+    return query.order_by(models.Recording.start_time.desc()).all()
+
+def delete_recordings(db: Session, camera_id: int | None = None):
+    query = db.query(models.Recording)
+
+    if camera_id is not None:
+        query = query.filter(models.Recording.camera_id == camera_id)
+
+    count = query.count()
+    query.delete()
+    db.commit()
+
+    return count
