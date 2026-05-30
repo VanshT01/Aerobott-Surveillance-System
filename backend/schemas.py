@@ -90,3 +90,20 @@ class EventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class GPSLocationCreate(BaseModel):
+    device_id: int
+    latitude: float
+    longitude: float
+
+
+class GPSLocationResponse(BaseModel):
+    id: int
+    device_id: int
+    latitude: float
+    longitude: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -140,3 +140,38 @@ def get_events(db: Session, camera_id: int | None = None, limit: int = 50):
 
 def get_event(db: Session, event_id: int):
     return db.query(models.Event).filter(models.Event.id == event_id).first()
+
+
+def store_gps_location(db: Session, device_id: int, latitude: float, longitude: float):
+    device = get_device(db, device_id)
+
+    if not device:
+        return None
+
+    if device.device_type != models.DeviceType.gps_tracker:
+        return None
+
+    device.latitude = str(latitude)
+    device.longitude = str(longitude)
+    device.status = models.DeviceStatus.online
+
+    location = models.GPSLocation(
+        device_id=device_id,
+        latitude=latitude,
+        longitude=longitude
+    )
+
+    db.add(location)
+    db.commit()
+    db.refresh(location)
+
+    return location
+
+
+def get_gps_locations(db: Session, device_id: int | None = None, limit: int = 100):
+    query = db.query(models.GPSLocation)
+
+    if device_id is not None:
+        query = query.filter(models.GPSLocation.device_id == device_id)
+
+    return query.order_by(models.GPSLocation.created_at.desc()).limit(limit).all()

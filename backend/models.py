@@ -1,5 +1,5 @@
 # create the devices table
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, DateTime, Enum, ForeignKey
 from sqlalchemy.sql import func
 import enum
 
@@ -84,6 +84,16 @@ class Event(Base):
     type = Column(String, nullable=False)
     time = Column(DateTime(timezone=True), nullable=False)
     snapshot = Column(String, nullable=False)
+
+
+class GPSLocation(Base):
+    __tablename__ = "gps_locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 # for camera:
 # name

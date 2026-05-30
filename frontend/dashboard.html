@@ -2,6 +2,10 @@
 <html>
 <head>
     <title>Surveillance Live View</title>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
 
     <style>
         body {
@@ -16,6 +20,103 @@
             border-radius: 10px;
             max-width: 1100px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .section {
+            margin-top: 24px;
+            max-width: 1000px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .section-header h3 {
+            margin: 0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            padding: 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+            margin-bottom: 16px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-field label {
+            color: #333;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .form-field input,
+        .form-field select {
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            font-size: 14px;
+            padding: 8px;
+            min-width: 0;
+        }
+
+        .form-actions {
+            display: flex;
+            align-items: end;
+            gap: 8px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            min-width: 1200px;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #e6e6e6;
+            padding: 9px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f1f1f1;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+
+        td.actions {
+            white-space: nowrap;
+        }
+
+        .muted {
+            color: #777;
+        }
+
+        .small-button {
+            font-size: 13px;
+            padding: 7px 10px;
+            margin: 0 4px 0 0;
         }
 
         #mjpegStream {
@@ -62,6 +163,39 @@
         .event-feed {
             margin-top: 20px;
             max-width: 1000px;
+        }
+
+        .tracker-map {
+            display: none;
+            margin-top: 20px;
+            max-width: 1000px;
+        }
+
+        .tracker-status {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .tracker-status div {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 10px;
+        }
+
+        .tracker-status span {
+            font-weight: bold;
+        }
+
+        #trackerMap {
+            width: 100%;
+            height: 420px;
+            border: 2px solid #444;
+            border-radius: 8px;
+            background: #ddd;
         }
 
         .event-item {
@@ -114,6 +248,18 @@
             color: white;
             border: none;
         }
+
+        @media (max-width: 900px) {
+            .form-grid,
+            .tracker-status {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 
@@ -143,6 +289,16 @@
         <p>Current Time: <span id="clock">Loading...</span></p>
     </div>
 
+    <div class="tracker-map" id="trackerMapSection">
+        <h3>Tracking Map</h3>
+        <div class="tracker-status">
+            <div>Devices: <span id="trackerName">Waiting for tracking devices</span></div>
+            <div>Visible: <span id="trackerLatitude">0</span></div>
+            <div>Last Refresh: <span id="trackerLongitude">N/A</span></div>
+        </div>
+        <div id="trackerMap"></div>
+    </div>
+
     <h3>MJPEG Stream</h3>
     <img
         id="mjpegStream"
@@ -157,14 +313,116 @@
         <h3>Event Feed</h3>
         <div id="eventFeed">Loading events...</div>
     </div>
+
+    <div class="section">
+        <div class="section-header">
+            <h3>Device Table</h3>
+            <button class="primary small-button" onclick="resetDeviceForm()">New Device</button>
+        </div>
+
+        <form id="deviceForm" class="form-grid">
+            <input type="hidden" id="deviceId" />
+
+            <div class="form-field">
+                <label for="deviceName">Name</label>
+                <input id="deviceName" required placeholder="Front Gate Camera" />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceType">Device Type</label>
+                <select id="deviceType" required>
+                    <option value="camera">camera</option>
+                    <option value="gps_tracker">gps_tracker</option>
+                    <option value="drone">drone</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label for="deviceStatus">Status</label>
+                <select id="deviceStatus">
+                    <option value="unknown">unknown</option>
+                    <option value="online">online</option>
+                    <option value="offline">offline</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label for="deviceIp">IP Address</label>
+                <input id="deviceIp" placeholder="192.168.0.10" />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceRtsp">RTSP URL</label>
+                <input id="deviceRtsp" placeholder="rtsp://..." />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceOnvif">ONVIF URL</label>
+                <input id="deviceOnvif" placeholder="http://..." />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceLatitude">Latitude</label>
+                <input id="deviceLatitude" inputmode="decimal" placeholder="19.076" />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceLongitude">Longitude</label>
+                <input id="deviceLongitude" inputmode="decimal" placeholder="72.877" />
+            </div>
+
+            <div class="form-field">
+                <label for="deviceLocation">Location Name</label>
+                <input id="deviceLocation" placeholder="Front gate" />
+            </div>
+
+            <div class="form-actions">
+                <button class="success" type="submit" id="saveDeviceButton">Add Device</button>
+                <button type="button" onclick="resetDeviceForm()">Clear</button>
+            </div>
+        </form>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>RTSP</th>
+                        <th>ONVIF</th>
+                        <th>Latitude</th>
+                        <th>Longitude</th>
+                        <th>Location</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="devicesTableBody">
+                    <tr>
+                        <td colspan="13" class="muted">Loading devices...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const API_BASE = "http://127.0.0.1:8000";
 let CAMERA_ID = null;
 const STORAGE_KEY = "surveillance_selected_device_id";
 
 let pc = null;
+let devicesCache = [];
+let trackerMap = null;
+let trackerMarkers = {};
+let trackerPaths = {};
+let lastFocusedTrackerId = null;
 
 function updateClock() {
     document.getElementById("clock").innerText =
@@ -175,19 +433,23 @@ async function loadDevices() {
     try {
         const response = await fetch(`${API_BASE}/devices`);
         const devices = await response.json();
+        devicesCache = devices;
+        renderDevicesTable();
 
         const selector = document.getElementById("deviceSelector");
         selector.innerHTML = "";
 
         if (devices.length === 0) {
             selector.innerHTML = "<option value=''>No devices found</option>";
+            CAMERA_ID = null;
+            refreshTrackerMap();
             return;
         }
 
         devices.forEach(device => {
             const option = document.createElement("option");
             option.value = device.id;
-            option.textContent = `Device ${device.id} - ${device.name} (${device.status})`;
+            option.textContent = `Device ${device.id} - ${device.name} (${device.device_type}, ${device.status})`;
             selector.appendChild(option);
         });
 
@@ -204,7 +466,69 @@ async function loadDevices() {
     } catch (error) {
         console.error("Failed to load devices:", error);
         document.getElementById("deviceSelector").innerHTML = "<option>Error loading devices</option>";
+        document.getElementById("devicesTableBody").innerHTML =
+            "<tr><td colspan='13'>Device API error</td></tr>";
     }
+}
+
+function renderDevicesTable() {
+    const tbody = document.getElementById("devicesTableBody");
+    tbody.innerHTML = "";
+
+    if (devicesCache.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='13' class='muted'>No devices found</td></tr>";
+        return;
+    }
+
+    devicesCache.forEach(device => {
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+            <td>${device.id}</td>
+            <td>${escapeHtml(device.name)}</td>
+            <td>${device.device_type}</td>
+            <td>${device.status}</td>
+            <td>${formatCell(device.ip_address)}</td>
+            <td>${formatCell(device.rtsp_url)}</td>
+            <td>${formatCell(device.onvif_url)}</td>
+            <td>${formatCell(device.latitude)}</td>
+            <td>${formatCell(device.longitude)}</td>
+            <td>${formatCell(device.location_name)}</td>
+            <td>${formatDate(device.created_at)}</td>
+            <td>${formatDate(device.updated_at)}</td>
+            <td class="actions">
+                <button class="small-button" type="button" onclick="editDevice(${device.id})">Edit</button>
+                <button class="danger small-button" type="button" onclick="deleteDeviceFromDashboard(${device.id})">Delete</button>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+    });
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function formatCell(value) {
+    if (value === null || value === undefined || value === "") {
+        return "<span class='muted'>N/A</span>";
+    }
+
+    return escapeHtml(value);
+}
+
+function formatDate(value) {
+    if (!value) {
+        return "<span class='muted'>N/A</span>";
+    }
+
+    return new Date(value).toLocaleString();
 }
 
 function onDeviceChange() {
@@ -224,10 +548,165 @@ function onDeviceChange() {
 function refreshDeviceContent() {
     if (!CAMERA_ID) return;
 
-    refreshMjpegStream();
-    fetchDashboardInfo();
-    fetchRecordingStatus();
-    fetchEvents();
+    const device = getSelectedDevice();
+
+    if (device && device.device_type === "camera") {
+        refreshMjpegStream();
+        fetchDashboardInfo();
+        fetchRecordingStatus();
+        fetchEvents();
+    } else {
+        document.getElementById("mjpegStream").src = "";
+        document.getElementById("video").srcObject = null;
+        document.getElementById("resolution").innerText = "N/A";
+        document.getElementById("fps").innerText = "N/A";
+        document.getElementById("recordingStatus").innerText = "N/A";
+        document.getElementById("eventFeed").innerText = "Camera events not available for this device";
+
+        if (device) {
+            const statusEl = document.getElementById("status");
+            statusEl.innerText = device.status;
+            statusEl.className = device.status === "online" ? "online" : "offline";
+        }
+    }
+
+    refreshTrackerMap();
+}
+
+function getSelectedDevice() {
+    return devicesCache.find(device => device.id === CAMERA_ID);
+}
+
+function normalizeOptionalValue(value) {
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+}
+
+function getDeviceFormPayload(includeStatus) {
+    const payload = {
+        name: document.getElementById("deviceName").value.trim(),
+        device_type: document.getElementById("deviceType").value,
+        ip_address: normalizeOptionalValue(document.getElementById("deviceIp").value),
+        rtsp_url: normalizeOptionalValue(document.getElementById("deviceRtsp").value),
+        onvif_url: normalizeOptionalValue(document.getElementById("deviceOnvif").value),
+        latitude: normalizeOptionalValue(document.getElementById("deviceLatitude").value),
+        longitude: normalizeOptionalValue(document.getElementById("deviceLongitude").value),
+        location_name: normalizeOptionalValue(document.getElementById("deviceLocation").value)
+    };
+
+    if (includeStatus) {
+        payload.status = document.getElementById("deviceStatus").value;
+    }
+
+    return payload;
+}
+
+function resetDeviceForm() {
+    document.getElementById("deviceForm").reset();
+    document.getElementById("deviceId").value = "";
+    document.getElementById("deviceStatus").value = "unknown";
+    document.getElementById("saveDeviceButton").innerText = "Add Device";
+}
+
+function editDevice(deviceId) {
+    const device = devicesCache.find(item => item.id === deviceId);
+
+    if (!device) {
+        return;
+    }
+
+    document.getElementById("deviceId").value = device.id;
+    document.getElementById("deviceName").value = device.name ?? "";
+    document.getElementById("deviceType").value = device.device_type;
+    document.getElementById("deviceStatus").value = device.status;
+    document.getElementById("deviceIp").value = device.ip_address ?? "";
+    document.getElementById("deviceRtsp").value = device.rtsp_url ?? "";
+    document.getElementById("deviceOnvif").value = device.onvif_url ?? "";
+    document.getElementById("deviceLatitude").value = device.latitude ?? "";
+    document.getElementById("deviceLongitude").value = device.longitude ?? "";
+    document.getElementById("deviceLocation").value = device.location_name ?? "";
+    document.getElementById("saveDeviceButton").innerText = "Save Changes";
+    document.getElementById("deviceName").focus();
+}
+
+async function saveDevice(event) {
+    event.preventDefault();
+
+    const deviceId = document.getElementById("deviceId").value;
+    const isEditing = deviceId !== "";
+    const payload = getDeviceFormPayload(isEditing);
+
+    if (!payload.name) {
+        alert("Device name is required");
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            isEditing ? `${API_BASE}/devices/${deviceId}` : `${API_BASE}/devices`,
+            {
+                method: isEditing ? "PATCH" : "POST",
+                body: JSON.stringify(payload),
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.detail || "Failed to save device");
+            return;
+        }
+
+        const status = document.getElementById("deviceStatus").value;
+
+        if (!isEditing && status !== "unknown") {
+            await fetch(`${API_BASE}/devices/${data.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ status }),
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+        }
+
+        resetDeviceForm();
+        await loadDevices();
+    } catch (error) {
+        console.error(error);
+        alert("Device save failed");
+    }
+}
+
+async function deleteDeviceFromDashboard(deviceId) {
+    if (!confirm(`Delete device ${deviceId}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/devices/${deviceId}`, {
+            method: "DELETE"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.detail || "Failed to delete device");
+            return;
+        }
+
+        if (CAMERA_ID === deviceId) {
+            CAMERA_ID = null;
+            localStorage.removeItem(STORAGE_KEY);
+        }
+
+        await loadDevices();
+    } catch (error) {
+        console.error(error);
+        alert("Device delete failed");
+    }
 }
 
 function refreshMjpegStream() {
@@ -238,12 +717,14 @@ function refreshMjpegStream() {
 }
 
 document.getElementById("deviceSelector").addEventListener("change", onDeviceChange);
+document.getElementById("deviceForm").addEventListener("submit", saveDevice);
 
 updateClock();
 setInterval(updateClock, 1000);
 
 async function fetchDashboardInfo() {
     if (!CAMERA_ID) return;
+    if (getSelectedDevice()?.device_type !== "camera") return;
 
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/dashboard`);
@@ -265,6 +746,7 @@ async function fetchDashboardInfo() {
 
 async function fetchRecordingStatus() {
     if (!CAMERA_ID) return;
+    if (getSelectedDevice()?.device_type !== "camera") return;
 
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/recording/status`);
@@ -289,6 +771,7 @@ async function fetchRecordingStatus() {
 
 async function fetchEvents() {
     if (!CAMERA_ID) return;
+    if (getSelectedDevice()?.device_type !== "camera") return;
 
     try {
         const response = await fetch(`${API_BASE}/events?camera_id=${CAMERA_ID}&limit=20`);
@@ -330,9 +813,177 @@ async function fetchEvents() {
     }
 }
 
+function initTrackerMap() {
+    if (trackerMap || typeof L === "undefined") {
+        return;
+    }
+
+    trackerMap = L.map("trackerMap").setView([19.076, 72.877], 12);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(trackerMap);
+}
+
+function updateTrackerStatus(devicesLabel, visibleCount, lastRefresh) {
+    document.getElementById("trackerName").innerText = devicesLabel;
+    document.getElementById("trackerLatitude").innerText = visibleCount;
+    document.getElementById("trackerLongitude").innerText = lastRefresh;
+}
+
+function hideTrackerMap() {
+    document.getElementById("trackerMapSection").style.display = "none";
+}
+
+function showTrackerMap() {
+    document.getElementById("trackerMapSection").style.display = "block";
+}
+
+function hasTrackerCoordinates(device) {
+    if (!device) {
+        return false;
+    }
+
+    const lat = parseFloat(device.latitude);
+    const lon = parseFloat(device.longitude);
+
+    return !Number.isNaN(lat) && !Number.isNaN(lon);
+}
+
+function isTrackingDevice(device) {
+    return ["gps_tracker", "drone"].includes(device.device_type);
+}
+
+async function refreshTrackerMap() {
+    try {
+        const devicesResponse = await fetch(`${API_BASE}/devices`);
+        const devices = await devicesResponse.json();
+        devicesCache = devices;
+        renderDevicesTable();
+
+        const trackers = devices.filter(device =>
+            isTrackingDevice(device) && hasTrackerCoordinates(device)
+        );
+
+        if (trackers.length === 0) {
+            hideTrackerMap();
+            return;
+        }
+
+        showTrackerMap();
+        initTrackerMap();
+
+        if (!trackerMap) {
+            return;
+        }
+
+        setTimeout(() => trackerMap.invalidateSize(), 0);
+
+        const bounds = [];
+        const visibleTrackerIds = new Set();
+
+        trackers.forEach(device => {
+            const lat = parseFloat(device.latitude);
+            const lon = parseFloat(device.longitude);
+
+            if (Number.isNaN(lat) || Number.isNaN(lon)) {
+                return;
+            }
+
+            const point = [lat, lon];
+            bounds.push(point);
+            visibleTrackerIds.add(String(device.id));
+
+            if (!trackerMarkers[device.id]) {
+                trackerMarkers[device.id] = L.circleMarker(point, {
+                    radius: 9,
+                    color: "#ffffff",
+                    weight: 3,
+                    fillColor: "#d9534f",
+                    fillOpacity: 1
+                }).addTo(trackerMap);
+            } else {
+                trackerMarkers[device.id].setLatLng(point);
+            }
+
+            trackerMarkers[device.id].bindPopup(
+                `${device.name}<br>Type: ${device.device_type}<br>Status: ${device.status}<br>${lat}, ${lon}`
+            );
+        });
+
+        Object.keys(trackerMarkers).forEach(deviceId => {
+            if (!visibleTrackerIds.has(deviceId)) {
+                trackerMap.removeLayer(trackerMarkers[deviceId]);
+                delete trackerMarkers[deviceId];
+            }
+        });
+
+        Object.keys(trackerPaths).forEach(deviceId => {
+            if (!visibleTrackerIds.has(deviceId)) {
+                trackerMap.removeLayer(trackerPaths[deviceId]);
+                delete trackerPaths[deviceId];
+            }
+        });
+
+        updateTrackerStatus(
+            trackers.map(device => device.name).join(", "),
+            trackers.length,
+            new Date().toLocaleTimeString()
+        );
+
+        await Promise.all(trackers.map(device => refreshTrackerPath(device.id)));
+
+        if (lastFocusedTrackerId === null && trackers.length > 0) {
+            trackerMarkers[trackers[0].id].openPopup();
+            lastFocusedTrackerId = trackers[0].id;
+        }
+
+        if (bounds.length === 1) {
+            trackerMap.setView(bounds[0], 17);
+        } else if (bounds.length > 1) {
+            trackerMap.fitBounds(bounds, { padding: [30, 30] });
+        }
+    } catch (error) {
+        console.error("Failed to refresh tracker map:", error);
+    }
+}
+
+async function refreshTrackerPath(deviceId) {
+    const response = await fetch(`${API_BASE}/gps-locations?device_id=${deviceId}&limit=100`);
+
+    if (!response.ok) {
+        return;
+    }
+
+    const locations = await response.json();
+    const points = locations
+        .slice()
+        .reverse()
+        .map(location => [location.latitude, location.longitude]);
+
+    if (points.length < 2) {
+        return;
+    }
+
+    if (!trackerPaths[deviceId]) {
+        trackerPaths[deviceId] = L.polyline(points, {
+            color: "#0275d8",
+            weight: 4
+        }).addTo(trackerMap);
+    } else {
+        trackerPaths[deviceId].setLatLngs(points);
+    }
+}
+
 async function startRecording() {
     if (!CAMERA_ID) {
         alert("Please select a device first");
+        return;
+    }
+
+    if (getSelectedDevice()?.device_type !== "camera") {
+        alert("Recording is only available for cameras");
         return;
     }
 
@@ -362,6 +1013,11 @@ async function stopRecording() {
         return;
     }
 
+    if (getSelectedDevice()?.device_type !== "camera") {
+        alert("Recording is only available for cameras");
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/recording/stop`, {
             method: "POST"
@@ -385,6 +1041,11 @@ async function stopRecording() {
 async function changeCameraSource() {
     if (!CAMERA_ID) {
         alert("Please select a device first");
+        return;
+    }
+
+    if (getSelectedDevice()?.device_type !== "camera") {
+        alert("Camera source is only available for cameras");
         return;
     }
 
@@ -438,6 +1099,11 @@ async function startWebRTC() {
         return;
     }
 
+    if (getSelectedDevice()?.device_type !== "camera") {
+        alert("WebRTC is only available for cameras");
+        return;
+    }
+
     pc = new RTCPeerConnection();
 
     pc.addTransceiver("video", {
@@ -482,6 +1148,7 @@ loadDevices();
 setInterval(fetchDashboardInfo, 5000);
 setInterval(fetchRecordingStatus, 3000);
 setInterval(fetchEvents, 5000);
+setInterval(refreshTrackerMap, 5000);
 </script>
 
 </body>

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from webrtc_service import CameraVideoTrack
 from recording_service import start_recording, stop_recording, is_recording
+from mqtt_service import get_mqtt_config, start_mqtt_listener
 import os
 
 models.Base.metadata.create_all(bind=engine)
@@ -35,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 pcs = set()
+mqtt_client = None
 
 class WebRTCOffer(BaseModel):
     sdp: str
@@ -130,6 +132,7 @@ def get_camera_credentials(device_id: int, db: Session = Depends(get_db)):
 
 @app.on_event("startup")
 def startup_event():
+    global mqtt_client
 
     monitor_thread = threading.Thread(
         target=monitor_cameras,
@@ -137,6 +140,7 @@ def startup_event():
     )
 
     monitor_thread.start()
+    mqtt_client = start_mqtt_listener()
 
 @app.post("/devices/{device_id}/check-stream", response_model=schemas.DeviceResponse)
 def check_device_stream(device_id: int, db: Session = Depends(get_db)):
@@ -344,6 +348,46 @@ def get_event_snapshot(event_id: int, db: Session = Depends(get_db)):
         media_type="image/jpeg",
         filename=os.path.basename(event.snapshot)
     )
+
+
+@app.get("/mqtt/status")
+def mqtt_status():
+    config = get_mqtt_config()
+
+    return {
+        **config,
+        "connected": bool(mqtt_client and mqtt_client.is_connected())
+    }
+
+
+@app.post("/gps-locations", response_model=schemas.GPSLocationResponse)
+def create_gps_location(
+    location: schemas.GPSLocationCreate,
+    db: Session = Depends(get_db)
+):
+    device = crud.get_device(db, location.device_id)
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if device.device_type != models.DeviceType.gps_tracker:
+        raise HTTPException(status_code=400, detail="Device is not a GPS tracker")
+
+    return crud.store_gps_location(
+        db=db,
+        device_id=location.device_id,
+        latitude=location.latitude,
+        longitude=location.longitude
+    )
+
+
+@app.get("/gps-locations", response_model=list[schemas.GPSLocationResponse])
+def list_gps_locations(
+    device_id: int | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    return crud.get_gps_locations(db, device_id, limit)
 
 
 @app.get("/recordings/{recording_id}/download")
