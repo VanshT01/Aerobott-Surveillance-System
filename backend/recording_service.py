@@ -1,15 +1,17 @@
-import os
 import cv2
 import time
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 
 from database import SessionLocal
 from rtsp_service import get_video_source
+from detection_service import get_object_tracker
+from event_service import create_detection_events
 import crud
 
 
-RECORDINGS_DIR = "recordings"
+RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
 CHUNK_SECONDS = 60
 
 active_recorders = {}
@@ -22,6 +24,7 @@ class CameraRecorder:
         self.source = get_video_source(rtsp_url)
         self.running = False
         self.thread = None
+        self.tracker = get_object_tracker(rtsp_url)
 
     def start(self):
         if self.running:
@@ -86,22 +89,22 @@ class CameraRecorder:
             width = 640
             height = 480
 
-        camera_folder = os.path.join(
+        camera_folder = Path(
             RECORDINGS_DIR,
             f"camera{self.camera_id}"
         )
 
-        os.makedirs(camera_folder, exist_ok=True)
+        camera_folder.mkdir(parents=True, exist_ok=True)
 
         start_time = datetime.now(timezone.utc)
 
         filename = start_time.strftime("%H_%M_%S.mp4")
-        path = os.path.join(camera_folder, filename)
+        path = camera_folder / filename
 
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
         writer = cv2.VideoWriter(
-            path,
+            str(path),
             fourcc,
             fps,
             (width, height)
@@ -124,6 +127,8 @@ class CameraRecorder:
                 break
 
             frame = cv2.resize(frame, (width, height))
+            frame, detections = self.tracker.track_objects(frame)
+            create_detection_events(self.camera_id, detections, frame)
             frame = self.draw_overlay(frame, fps)
 
             writer.write(frame)
@@ -133,7 +138,7 @@ class CameraRecorder:
         writer.release()
         cap.release()
 
-        if os.path.exists(path) and os.path.getsize(path) > 0:
+        if path.exists() and path.stat().st_size > 0:
             db = SessionLocal()
 
             try:
@@ -142,7 +147,7 @@ class CameraRecorder:
                     camera_id=self.camera_id,
                     start_time=start_time,
                     end_time=end_time,
-                    path=path
+                    path=str(path)
                 )
             finally:
                 db.close()

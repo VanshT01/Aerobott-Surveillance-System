@@ -13,6 +13,7 @@ google-crc32c==1.8.0
 h11==0.16.0
 idna==3.17
 ifaddr==0.2.0
+lap==0.5.12
 numpy==2.4.6
 opencv-python==4.13.0.92
 psycopg2-binary==2.9.12
@@ -27,4 +28,5 @@ SQLAlchemy==2.0.50
 starlette==1.2.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+ultralytics==8.4.56
 uvicorn==0.48.0

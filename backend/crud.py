@@ -112,3 +112,31 @@ def delete_recordings(db: Session, camera_id: int | None = None):
     db.commit()
 
     return count
+
+
+def create_event(db: Session, camera_id: int, event_type: str, event_time, snapshot: str):
+    event = models.Event(
+        camera_id=camera_id,
+        type=event_type,
+        time=event_time,
+        snapshot=snapshot
+    )
+
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
+def get_events(db: Session, camera_id: int | None = None, limit: int = 50):
+    query = db.query(models.Event)
+
+    if camera_id is not None:
+        query = query.filter(models.Event.camera_id == camera_id)
+
+    return query.order_by(models.Event.time.desc()).limit(limit).all()
+
+
+def get_event(db: Session, event_id: int):
+    return db.query(models.Event).filter(models.Event.id == event_id).first()

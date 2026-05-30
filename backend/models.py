@@ -75,6 +75,16 @@ class Recording(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(Integer, ForeignKey("devices.id"), nullable=False)
+    type = Column(String, nullable=False)
+    time = Column(DateTime(timezone=True), nullable=False)
+    snapshot = Column(String, nullable=False)
+
 # for camera:
 # name
 # device_type

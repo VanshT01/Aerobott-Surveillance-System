@@ -1,7 +1,8 @@
 import cv2
 from database import SessionLocal
 from models import Device, DeviceType, DeviceStatus
-
+from detection_service import get_object_tracker
+from event_service import create_detection_events
 import time
 
 
@@ -83,10 +84,11 @@ def monitor_cameras():
 
         time.sleep(30)
 
-def generate_mjpeg_stream(rtsp_url: str):
+def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
     source = get_video_source(rtsp_url)
 
     cap = cv2.VideoCapture(source)
+    tracker = get_object_tracker(rtsp_url)
 
     while True:
         success, frame = cap.read()
@@ -94,6 +96,8 @@ def generate_mjpeg_stream(rtsp_url: str):
         if not success:
             break
 
+        frame, detections = tracker.track_objects(frame)
+        create_detection_events(camera_id, detections, frame)
         success, buffer = cv2.imencode(".jpg", frame)
 
         if not success:

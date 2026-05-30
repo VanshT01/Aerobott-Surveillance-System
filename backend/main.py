@@ -80,6 +80,15 @@ def update_device(
     return device
 
 
+@app.put("/devices/{device_id}", response_model=schemas.DeviceResponse)
+def replace_device(
+    device_id: int,
+    device_update: schemas.DeviceUpdate,
+    db: Session = Depends(get_db)
+):
+    return update_device(device_id, device_update, db)
+
+
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int, db: Session = Depends(get_db)):
     device = crud.delete_device(db, device_id)
@@ -186,7 +195,7 @@ def live_view(device_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
 
     return StreamingResponse(
-        generate_mjpeg_stream(device.rtsp_url),
+        generate_mjpeg_stream(device.id, device.rtsp_url),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -237,7 +246,7 @@ async def webrtc_offer(device_id: int, offer: WebRTCOffer, db: Session = Depends
             await pc.close()
             pcs.discard(pc)
 
-    video_track = CameraVideoTrack(device.rtsp_url)
+    video_track = CameraVideoTrack(device.id, device.rtsp_url)
     pc.addTrack(video_track)
 
     rtc_offer = RTCSessionDescription(
@@ -304,6 +313,38 @@ def get_recording_status(device_id: int):
         "camera_id": device_id,
         "recording": is_recording(device_id)
     }
+
+
+@app.get("/recordings", response_model=list[schemas.RecordingResponse])
+def list_recordings(camera_id: int | None = None, db: Session = Depends(get_db)):
+    return crud.get_recordings(db, camera_id)
+
+
+@app.get("/events", response_model=list[schemas.EventResponse])
+def list_events(
+    camera_id: int | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    return crud.get_events(db, camera_id, limit)
+
+
+@app.get("/events/{event_id}/snapshot")
+def get_event_snapshot(event_id: int, db: Session = Depends(get_db)):
+    event = crud.get_event(db, event_id)
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if not os.path.exists(event.snapshot):
+        raise HTTPException(status_code=404, detail="Event snapshot missing")
+
+    return FileResponse(
+        event.snapshot,
+        media_type="image/jpeg",
+        filename=os.path.basename(event.snapshot)
+    )
+
 
 @app.get("/recordings/{recording_id}/download")
 def download_recording(recording_id: int, db: Session = Depends(get_db)):

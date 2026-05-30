@@ -67,3 +67,26 @@ class CameraCredentialsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RecordingResponse(BaseModel):
+    id: int
+    camera_id: int
+    start_time: datetime
+    end_time: datetime
+    path: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EventResponse(BaseModel):
+    id: int
+    camera_id: int
+    type: str
+    time: datetime
+    snapshot: str
+
+    class Config:
+        from_attributes = True

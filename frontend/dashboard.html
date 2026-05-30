@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WebRTC Surveillance Live View</title>
+    <title>Surveillance Live View</title>
 
     <style>
         body {
@@ -18,10 +18,19 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        video {
+        #mjpegStream {
             width: 100%;
             max-width: 1000px;
             border: 3px solid #222;
+            border-radius: 8px;
+            background: black;
+            display: block;
+        }
+
+        video {
+            width: 100%;
+            max-width: 500px;
+            border: 2px solid #444;
             border-radius: 8px;
             background: black;
         }
@@ -48,6 +57,36 @@
         .not-recording {
             color: gray;
             font-weight: bold;
+        }
+
+        .event-feed {
+            margin-top: 20px;
+            max-width: 1000px;
+        }
+
+        .event-item {
+            display: grid;
+            grid-template-columns: 120px 1fr 140px;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .event-time {
+            color: #555;
+            font-size: 14px;
+        }
+
+        .event-type {
+            font-weight: bold;
+        }
+
+        .event-item img {
+            width: 140px;
+            height: 80px;
+            object-fit: cover;
+            background: #111;
         }
 
         button {
@@ -81,7 +120,7 @@
 <body>
 
 <div class="dashboard">
-    <h1>WebRTC Live View</h1>
+    <h1>Surveillance Live View</h1>
 
     <div style="margin-bottom: 20px;">
         <label for="deviceSelector" style="font-size: 16px; margin-right: 10px;">Select Device:</label>
@@ -90,10 +129,11 @@
         </select>
     </div>
 
-    <button class="primary" onclick="startWebRTC()">Start WebRTC Stream</button>
+    <button class="primary" onclick="refreshMjpegStream()">Refresh MJPEG Stream</button>
     <button class="success" onclick="startRecording()">Start Recording</button>
     <button class="danger" onclick="stopRecording()">Stop Recording</button>
     <button onclick="changeCameraSource()">Change Camera Source</button>
+    <button onclick="startWebRTC()">Start WebRTC Fallback</button>
 
     <div class="info">
         <p>Status: <span id="status">Not connected</span></p>
@@ -103,15 +143,20 @@
         <p>Current Time: <span id="clock">Loading...</span></p>
     </div>
 
-    <video id="video" autoplay playsinline controls muted></video>
-
-    <h3>Fallback MJPEG Stream</h3>
+    <h3>MJPEG Stream</h3>
     <img
         id="mjpegStream"
         src=""
-        width="500"
-        alt="MJPEG fallback stream"
+        alt="MJPEG stream"
     />
+
+    <h3>WebRTC Fallback</h3>
+    <video id="video" autoplay playsinline controls muted></video>
+
+    <div class="event-feed">
+        <h3>Event Feed</h3>
+        <div id="eventFeed">Loading events...</div>
+    </div>
 </div>
 
 <script>
@@ -179,11 +224,17 @@ function onDeviceChange() {
 function refreshDeviceContent() {
     if (!CAMERA_ID) return;
 
-    const mjpeg = document.getElementById("mjpegStream");
-    mjpeg.src = `${API_BASE}/devices/${CAMERA_ID}/live?t=${Date.now()}`;
-
+    refreshMjpegStream();
     fetchDashboardInfo();
     fetchRecordingStatus();
+    fetchEvents();
+}
+
+function refreshMjpegStream() {
+    if (!CAMERA_ID) return;
+
+    const mjpeg = document.getElementById("mjpegStream");
+    mjpeg.src = `${API_BASE}/devices/${CAMERA_ID}/live?t=${Date.now()}`;
 }
 
 document.getElementById("deviceSelector").addEventListener("change", onDeviceChange);
@@ -192,8 +243,12 @@ updateClock();
 setInterval(updateClock, 1000);
 
 async function fetchDashboardInfo() {
+    if (!CAMERA_ID) return;
+
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/dashboard`);
+        if (!response.ok) throw new Error("Dashboard request failed");
+
         const data = await response.json();
 
         document.getElementById("resolution").innerText = data.resolution;
@@ -209,8 +264,12 @@ async function fetchDashboardInfo() {
 }
 
 async function fetchRecordingStatus() {
+    if (!CAMERA_ID) return;
+
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/recording/status`);
+        if (!response.ok) throw new Error("Recording status request failed");
+
         const data = await response.json();
 
         const recordingEl = document.getElementById("recordingStatus");
@@ -228,13 +287,66 @@ async function fetchRecordingStatus() {
     }
 }
 
+async function fetchEvents() {
+    if (!CAMERA_ID) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/events?camera_id=${CAMERA_ID}&limit=20`);
+        if (!response.ok) throw new Error("Events request failed");
+
+        const events = await response.json();
+        const feed = document.getElementById("eventFeed");
+        feed.innerHTML = "";
+
+        if (events.length === 0) {
+            feed.innerText = "No events yet";
+            return;
+        }
+
+        events.forEach(event => {
+            const item = document.createElement("div");
+            item.className = "event-item";
+
+            const time = document.createElement("div");
+            time.className = "event-time";
+            time.innerText = new Date(event.time).toLocaleTimeString();
+
+            const type = document.createElement("div");
+            type.className = "event-type";
+            type.innerText = event.type;
+
+            const snapshot = document.createElement("img");
+            snapshot.src = `${API_BASE}/events/${event.id}/snapshot`;
+            snapshot.alt = event.type;
+
+            item.appendChild(time);
+            item.appendChild(type);
+            item.appendChild(snapshot);
+            feed.appendChild(item);
+        });
+    } catch (error) {
+        console.error(error);
+        document.getElementById("eventFeed").innerText = "Event API error";
+    }
+}
+
 async function startRecording() {
+    if (!CAMERA_ID) {
+        alert("Please select a device first");
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/recording/start`, {
             method: "POST"
         });
 
         const data = await response.json();
+        if (!response.ok) {
+            alert(data.detail || "Failed to start recording");
+            return;
+        }
+
         alert(data.message);
 
         fetchRecordingStatus();
@@ -245,12 +357,22 @@ async function startRecording() {
 }
 
 async function stopRecording() {
+    if (!CAMERA_ID) {
+        alert("Please select a device first");
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}/recording/stop`, {
             method: "POST"
         });
 
         const data = await response.json();
+        if (!response.ok) {
+            alert(data.detail || "Failed to stop recording");
+            return;
+        }
+
         alert(data.message);
 
         fetchRecordingStatus();
@@ -261,6 +383,11 @@ async function stopRecording() {
 }
 
 async function changeCameraSource() {
+    if (!CAMERA_ID) {
+        alert("Please select a device first");
+        return;
+    }
+
     const newSource = prompt(
         "Enter new camera source. Use 0 for webcam or paste RTSP URL:"
     );
@@ -271,7 +398,7 @@ async function changeCameraSource() {
 
     try {
         const response = await fetch(`${API_BASE}/devices/${CAMERA_ID}`, {
-            method: "PUT",
+            method: "PATCH",
             body: JSON.stringify({
                 rtsp_url: newSource.trim()
             }),
@@ -281,7 +408,8 @@ async function changeCameraSource() {
         });
 
         if (!response.ok) {
-            alert("Failed to update camera source. Make sure PUT /devices/1 exists.");
+            const error = await response.json();
+            alert(error.detail || "Failed to update camera source.");
             return;
         }
 
@@ -294,9 +422,7 @@ async function changeCameraSource() {
 
         document.getElementById("video").srcObject = null;
 
-        const mjpeg = document.getElementById("mjpegStream");
-        mjpeg.src = `${API_BASE}/devices/${CAMERA_ID}/live?t=${Date.now()}`;
-
+        refreshMjpegStream();
         fetchDashboardInfo();
         fetchRecordingStatus();
 
@@ -343,6 +469,10 @@ async function startWebRTC() {
     });
 
     const answer = await response.json();
+    if (!response.ok) {
+        alert(answer.detail || "Failed to start WebRTC fallback");
+        return;
+    }
 
     await pc.setRemoteDescription(answer);
 }
@@ -351,6 +481,7 @@ loadDevices();
 
 setInterval(fetchDashboardInfo, 5000);
 setInterval(fetchRecordingStatus, 3000);
+setInterval(fetchEvents, 5000);
 </script>
 
 </body>
