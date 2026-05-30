@@ -81,7 +81,14 @@
 <body>
 
 <div class="dashboard">
-    <h1>WebRTC Live View - Front Gate Camera</h1>
+    <h1>WebRTC Live View</h1>
+
+    <div style="margin-bottom: 20px;">
+        <label for="deviceSelector" style="font-size: 16px; margin-right: 10px;">Select Device:</label>
+        <select id="deviceSelector" style="padding: 8px 12px; font-size: 16px; cursor: pointer;">
+            <option value="">Loading devices...</option>
+        </select>
+    </div>
 
     <button class="primary" onclick="startWebRTC()">Start WebRTC Stream</button>
     <button class="success" onclick="startRecording()">Start Recording</button>
@@ -101,7 +108,7 @@
     <h3>Fallback MJPEG Stream</h3>
     <img
         id="mjpegStream"
-        src="http://127.0.0.1:8000/devices/1/live"
+        src=""
         width="500"
         alt="MJPEG fallback stream"
     />
@@ -109,7 +116,8 @@
 
 <script>
 const API_BASE = "http://127.0.0.1:8000";
-const CAMERA_ID = 1;
+let CAMERA_ID = null;
+const STORAGE_KEY = "surveillance_selected_device_id";
 
 let pc = null;
 
@@ -117,6 +125,68 @@ function updateClock() {
     document.getElementById("clock").innerText =
         new Date().toLocaleString();
 }
+
+async function loadDevices() {
+    try {
+        const response = await fetch(`${API_BASE}/devices`);
+        const devices = await response.json();
+
+        const selector = document.getElementById("deviceSelector");
+        selector.innerHTML = "";
+
+        if (devices.length === 0) {
+            selector.innerHTML = "<option value=''>No devices found</option>";
+            return;
+        }
+
+        devices.forEach(device => {
+            const option = document.createElement("option");
+            option.value = device.id;
+            option.textContent = `Device ${device.id} - ${device.name} (${device.status})`;
+            selector.appendChild(option);
+        });
+
+        const savedDeviceId = localStorage.getItem(STORAGE_KEY);
+        if (savedDeviceId && devices.some(d => d.id === parseInt(savedDeviceId))) {
+            selector.value = savedDeviceId;
+            CAMERA_ID = parseInt(savedDeviceId);
+        } else {
+            selector.value = devices[0].id;
+            CAMERA_ID = devices[0].id;
+        }
+
+        refreshDeviceContent();
+    } catch (error) {
+        console.error("Failed to load devices:", error);
+        document.getElementById("deviceSelector").innerHTML = "<option>Error loading devices</option>";
+    }
+}
+
+function onDeviceChange() {
+    const selector = document.getElementById("deviceSelector");
+    CAMERA_ID = parseInt(selector.value);
+    localStorage.setItem(STORAGE_KEY, CAMERA_ID);
+
+    if (pc) {
+        pc.close();
+        pc = null;
+    }
+
+    document.getElementById("video").srcObject = null;
+    refreshDeviceContent();
+}
+
+function refreshDeviceContent() {
+    if (!CAMERA_ID) return;
+
+    const mjpeg = document.getElementById("mjpegStream");
+    mjpeg.src = `${API_BASE}/devices/${CAMERA_ID}/live?t=${Date.now()}`;
+
+    fetchDashboardInfo();
+    fetchRecordingStatus();
+}
+
+document.getElementById("deviceSelector").addEventListener("change", onDeviceChange);
 
 updateClock();
 setInterval(updateClock, 1000);
@@ -237,6 +307,11 @@ async function changeCameraSource() {
 }
 
 async function startWebRTC() {
+    if (!CAMERA_ID) {
+        alert("Please select a device first");
+        return;
+    }
+
     pc = new RTCPeerConnection();
 
     pc.addTransceiver("video", {
@@ -272,8 +347,7 @@ async function startWebRTC() {
     await pc.setRemoteDescription(answer);
 }
 
-fetchDashboardInfo();
-fetchRecordingStatus();
+loadDevices();
 
 setInterval(fetchDashboardInfo, 5000);
 setInterval(fetchRecordingStatus, 3000);
