@@ -4,14 +4,14 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from database import SessionLocal
-from rtsp_service import get_video_source
-from detection_service import get_object_tracker
-from event_service import create_detection_events
-import crud
+from app.db.session import SessionLocal
+from app.services.video.rtsp import get_video_source
+from app.services.vision.detection import get_object_tracker
+from app.services.events.detection_events import create_detection_events
+from app.repositories import crud
 
 
-RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
+RECORDINGS_DIR = Path(__file__).resolve().parents[3] / "recordings"
 CHUNK_SECONDS = 60
 
 active_recorders = {}

@@ -4,11 +4,11 @@ from pathlib import Path
 
 import cv2
 
-import crud
-from database import SessionLocal
+from app.repositories import crud
+from app.db.session import SessionLocal
 
 
-EVENTS_DIR = Path(__file__).resolve().parent / "events"
+EVENTS_DIR = Path(__file__).resolve().parents[3] / "events"
 EVENT_COOLDOWN_SECONDS = 30
 
 last_events = {}

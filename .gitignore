@@ -7,3 +7,10 @@ __pycache__/
 recordings/
 backend/recordings/
 backend/events/
+
+data/
+runs/
+
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo

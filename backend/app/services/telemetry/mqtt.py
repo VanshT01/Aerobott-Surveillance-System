@@ -1,8 +1,8 @@
 import json
 import os
 
-from database import SessionLocal
-import crud
+from app.db.session import SessionLocal
+from app.repositories import crud
 
 try:
     import paho.mqtt.client as mqtt

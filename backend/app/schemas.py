@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from models import DeviceType, DeviceStatus
+from app.db.models import DeviceType, DeviceStatus
 
 
 class DeviceCreate(BaseModel):  # used when adding a device
@@ -103,6 +103,17 @@ class GPSLocationResponse(BaseModel):
     device_id: int
     latitude: float
     longitude: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CrowdCountResponse(BaseModel):
+    id: int
+    camera_id: int
+    count: float
+    model_name: str
     created_at: datetime
 
     class Config:

@@ -3,9 +3,9 @@ import av
 import numpy as np
 from aiortc import VideoStreamTrack
 
-from rtsp_service import get_video_source
-from detection_service import get_object_tracker
-from event_service import create_detection_events
+from app.services.video.rtsp import get_video_source
+from app.services.vision.detection import get_object_tracker
+from app.services.events.detection_events import create_detection_events
 
 
 class CameraVideoTrack(VideoStreamTrack):

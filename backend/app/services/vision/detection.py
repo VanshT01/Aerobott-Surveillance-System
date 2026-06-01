@@ -3,7 +3,7 @@ from pathlib import Path
 import threading
 import cv2
 
-MODEL_PATH = Path(__file__).resolve().parent / "yolo11n.pt"
+MODEL_PATH = Path(__file__).resolve().parents[3] / "yolo11n.pt"
 model = YOLO(str(MODEL_PATH))
 TRACKER_CONFIG = "bytetrack.yaml"
 trackers = {}

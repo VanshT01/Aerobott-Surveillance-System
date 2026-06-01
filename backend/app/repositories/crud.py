@@ -1,8 +1,8 @@
 # handles the database actions
 from sqlalchemy.orm import Session
 
-import models
-import schemas
+from app.db import models
+from app import schemas
 
 
 def create_device(db: Session, device: schemas.DeviceCreate):
@@ -175,3 +175,35 @@ def get_gps_locations(db: Session, device_id: int | None = None, limit: int = 10
         query = query.filter(models.GPSLocation.device_id == device_id)
 
     return query.order_by(models.GPSLocation.created_at.desc()).limit(limit).all()
+
+
+def create_crowd_count(db: Session, camera_id: int, count: float, model_name: str):
+    crowd_count = models.CrowdCount(
+        camera_id=camera_id,
+        count=count,
+        model_name=model_name
+    )
+
+    db.add(crowd_count)
+    db.commit()
+    db.refresh(crowd_count)
+
+    return crowd_count
+
+
+def get_crowd_counts(db: Session, camera_id: int | None = None, limit: int = 50):
+    query = db.query(models.CrowdCount)
+
+    if camera_id is not None:
+        query = query.filter(models.CrowdCount.camera_id == camera_id)
+
+    return query.order_by(models.CrowdCount.created_at.desc()).limit(limit).all()
+
+
+def get_latest_crowd_count(db: Session, camera_id: int):
+    return (
+        db.query(models.CrowdCount)
+        .filter(models.CrowdCount.camera_id == camera_id)
+        .order_by(models.CrowdCount.created_at.desc())
+        .first()
+    )

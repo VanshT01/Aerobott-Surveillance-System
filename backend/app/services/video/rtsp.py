@@ -1,19 +1,28 @@
 import cv2
-from database import SessionLocal
-from models import Device, DeviceType, DeviceStatus
-from detection_service import get_object_tracker
-from event_service import create_detection_events
+from app.db.session import SessionLocal
+from app.db.models import Device, DeviceType, DeviceStatus
+from app.services.vision.detection import get_object_tracker
+from app.services.events.detection_events import create_detection_events
 import time
 
 
 def get_video_source(rtsp_url: str):
-    if rtsp_url == "0":
+    if rtsp_url is None:
+        return None
+
+    source = rtsp_url.strip()
+
+    if source == "0":
         return 0
-    return rtsp_url
+
+    return source
 
 
 def check_rtsp_stream(rtsp_url: str) -> bool:
     source = get_video_source(rtsp_url)
+
+    if source is None:
+        return False
 
     cap = cv2.VideoCapture(source)
 
@@ -30,6 +39,14 @@ def check_rtsp_stream(rtsp_url: str) -> bool:
 
 def get_stream_info(rtsp_url: str):
     source = get_video_source(rtsp_url)
+
+    if source is None:
+        return {
+            "is_opened": False,
+            "width": None,
+            "height": None,
+            "fps": None
+        }
 
     cap = cv2.VideoCapture(source)
 
@@ -86,6 +103,9 @@ def monitor_cameras():
 
 def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
     source = get_video_source(rtsp_url)
+
+    if source is None:
+        return
 
     cap = cv2.VideoCapture(source)
     tracker = get_object_tracker(rtsp_url)
