@@ -2,13 +2,11 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 import threading
-import cv2
 from app.services.video.rtsp import (
     monitor_cameras,
     check_rtsp_stream,
     get_stream_info,
-    generate_mjpeg_stream,
-    get_video_source
+    generate_mjpeg_stream
 )
 from app.db import models
 from app.db.models import DeviceStatus
@@ -21,7 +19,6 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from app.services.video.webrtc import CameraVideoTrack
 from app.services.video.recording import start_recording, stop_recording, is_recording
 from app.services.telemetry.mqtt import get_mqtt_config, start_mqtt_listener
-from app.services.vision.crowd_counting import count_crowd, get_model_status
 import os
 
 app = FastAPI(
@@ -328,73 +325,6 @@ def get_recording_status(device_id: int):
 @app.get("/recordings", response_model=list[schemas.RecordingResponse])
 def list_recordings(camera_id: int | None = None, db: Session = Depends(get_db)):
     return crud.get_recordings(db, camera_id)
-
-
-@app.get("/crowd-count/model/status")
-def crowd_count_model_status():
-    return get_model_status()
-
-
-@app.post("/devices/{device_id}/crowd-count", response_model=schemas.CrowdCountResponse)
-def run_device_crowd_count(device_id: int, db: Session = Depends(get_db)):
-    device = crud.get_device(db, device_id)
-
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
-
-    if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
-
-    source = get_video_source(device.rtsp_url)
-
-    if source is None:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
-
-    cap = cv2.VideoCapture(source)
-
-    if not cap.isOpened():
-        cap.release()
-        raise HTTPException(status_code=503, detail="Camera stream is unavailable")
-
-    success, frame = cap.read()
-    cap.release()
-
-    if not success:
-        raise HTTPException(status_code=503, detail="Could not read camera frame")
-
-    try:
-        result = count_crowd(frame)
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error))
-
-    return crud.create_crowd_count(
-        db=db,
-        camera_id=device.id,
-        count=result["count"],
-        model_name=result["model_name"]
-    )
-
-
-@app.get("/crowd-counts", response_model=list[schemas.CrowdCountResponse])
-def list_crowd_counts(
-    camera_id: int | None = None,
-    limit: int = 50,
-    db: Session = Depends(get_db)
-):
-    return crud.get_crowd_counts(db, camera_id, limit)
-
-
-@app.get("/devices/{device_id}/crowd-count/latest", response_model=schemas.CrowdCountResponse)
-def get_device_latest_crowd_count(device_id: int, db: Session = Depends(get_db)):
-    crowd_count = crud.get_latest_crowd_count(db, device_id)
-
-    if not crowd_count:
-        raise HTTPException(status_code=404, detail="Crowd count not found")
-
-    return crowd_count
 
 
 @app.get("/events", response_model=list[schemas.EventResponse])

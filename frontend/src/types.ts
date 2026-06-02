@@ -50,22 +50,6 @@ export interface EventItem {
   snapshot: string;
 }
 
-export interface CrowdCount {
-  id: number;
-  camera_id: number;
-  count: number;
-  model_name: string;
-  created_at: string;
-}
-
-export interface CrowdModelStatus {
-  model_name: string;
-  model_path: string;
-  configured: boolean;
-  loaded: boolean;
-  error: string | null;
-}
-
 export interface WebRTCAnswer {
   sdp: string;
   type: RTCSdpType;

@@ -5,7 +5,6 @@ import { DeviceManagement } from "./components/DeviceManagement";
 import { StatusPanel } from "./components/StatusPanel";
 import { StreamPanel } from "./components/StreamPanel";
 import { TrackingMap } from "./components/TrackingMap";
-import { CrowdCounting } from "./components/CrowdCounting";
 import { EventFeed } from "./components/EventFeed";
 
 const STORAGE_KEY = "surveillance_selected_device_id";
@@ -85,10 +84,7 @@ export function App() {
       <StatusPanel selectedDevice={selectedDevice} />
       <TrackingMap devices={devices} />
 
-      <div className="grid two-column">
-        <StreamPanel selectedDevice={selectedDevice} onDeviceChanged={loadDevices} />
-        <CrowdCounting selectedDevice={selectedDevice} />
-      </div>
+      <StreamPanel selectedDevice={selectedDevice} onDeviceChanged={loadDevices} />
 
       <EventFeed selectedDevice={selectedDevice} />
       <DeviceManagement devices={devices} onChanged={loadDevices} />

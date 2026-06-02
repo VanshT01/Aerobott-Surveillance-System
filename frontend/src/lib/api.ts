@@ -1,7 +1,5 @@
 import type {
   CameraDashboard,
-  CrowdCount,
-  CrowdModelStatus,
   Device,
   DevicePayload,
   EventItem,
@@ -43,12 +41,6 @@ export const api = {
   startRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/start`, { method: "POST" }),
   stopRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/stop`, { method: "POST" }),
   events: (cameraId: number, limit = 20) => request<EventItem[]>(`/events?camera_id=${cameraId}&limit=${limit}`),
-  crowdModelStatus: () => request<CrowdModelStatus>("/crowd-count/model/status"),
-  runCrowdCount: (id: number) => request<CrowdCount>(`/devices/${id}/crowd-count`, { method: "POST" }),
-  crowdCounts: (cameraId?: number, limit = 20) => {
-    const query = cameraId ? `?camera_id=${cameraId}&limit=${limit}` : `?limit=${limit}`;
-    return request<CrowdCount[]>(`/crowd-counts${query}`);
-  },
   webrtcOffer: (id: number, offer: RTCSessionDescriptionInit) =>
     request<WebRTCAnswer>(`/devices/${id}/webrtc`, { method: "POST", body: JSON.stringify(offer) })
 };

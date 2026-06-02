@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, liveUrl } from "../lib/api";
 import type { Device } from "../types";
+import { MjpegViewer } from "./MjpegViewer";
+import { StreamControls } from "./StreamControls";
+import { WebRTCViewer } from "./WebRTCViewer";
 
 interface Props {
   selectedDevice: Device | null;
@@ -13,10 +16,11 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   const [messageType, setMessageType] = useState<"info" | "error">("info");
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraSelected = selectedDevice?.device_type === "camera";
 
   useEffect(() => {
     setStreamUrl(null);
-    setMessage(selectedDevice?.device_type === "camera" ? "Stream not loaded." : "Select a camera to view the stream.");
+    setMessage(cameraSelected ? "Stream not loaded." : "Select a camera to view the stream.");
     setMessageType("info");
 
     if (pc) {
@@ -27,7 +31,7 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [selectedDevice?.id]);
+  }, [cameraSelected, selectedDevice?.id]);
 
   async function refreshStream() {
     setStreamUrl(null);
@@ -109,20 +113,18 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
     <section className="panel">
       <div className="section-header">
         <h2>Live Video</h2>
-        <div className="actions">
-          <button onClick={refreshStream}>Refresh</button>
-          <button onClick={startRecording}>Start Recording</button>
-          <button onClick={stopRecording}>Stop Recording</button>
-          <button onClick={changeCameraSource}>Source</button>
-          <button onClick={startWebRTC}>WebRTC</button>
-        </div>
+        <StreamControls
+          disabled={!cameraSelected}
+          onRefresh={refreshStream}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          onChangeSource={changeCameraSource}
+          onStartWebRTC={startWebRTC}
+        />
       </div>
 
-      {message && <div className={`notice ${messageType}`}>{message}</div>}
-      {streamUrl && <img className="video-frame" src={streamUrl} alt="MJPEG stream" />}
-
-      <h3>WebRTC Fallback</h3>
-      <video ref={videoRef} autoPlay playsInline controls muted />
+      <MjpegViewer message={message} messageType={messageType} streamUrl={streamUrl} />
+      <WebRTCViewer videoRef={videoRef} />
     </section>
   );
 }

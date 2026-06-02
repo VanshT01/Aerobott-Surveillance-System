@@ -22,7 +22,6 @@ backend/
 │       │   ├── rtsp.py
 │       │   └── webrtc.py
 │       └── vision/
-│           ├── crowd_counting.py
 │           └── detection.py
 ```
 

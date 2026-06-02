@@ -108,13 +108,3 @@ class GPSLocationResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-class CrowdCountResponse(BaseModel):
-    id: int
-    camera_id: int
-    count: float
-    model_name: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True

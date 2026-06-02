@@ -96,15 +96,6 @@ class GPSLocation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class CrowdCount(Base):
-    __tablename__ = "crowd_counts"
-
-    id = Column(Integer, primary_key=True, index=True)
-    camera_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
-    count = Column(Float, nullable=False)
-    model_name = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
 # for camera:
 # name
 # device_type
