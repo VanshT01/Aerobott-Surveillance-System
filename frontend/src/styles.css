@@ -318,16 +318,47 @@ video {
   background: #111827;
 }
 
-.device-form {
+.device-form,
+.geofence-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.device-form label {
+.device-form label,
+.geofence-form label {
   display: grid;
   gap: 6px;
+}
+
+.alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.security-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #f0b5b5;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #7a271a;
+  padding: 12px;
+}
+
+.security-alert span {
+  display: block;
+  color: #9f5f55;
+  font-size: 0.86rem;
+  margin-top: 4px;
+}
+
+.security-alert code {
+  color: #7a271a;
+  white-space: nowrap;
 }
 
 .span-2 {
@@ -349,7 +380,8 @@ video {
   .grid.two-column,
   .metrics,
   .metrics.compact,
-  .device-form {
+  .device-form,
+  .geofence-form {
     grid-template-columns: 1fr;
   }
 

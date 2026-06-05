@@ -1,5 +1,5 @@
 # create the devices table
-from sqlalchemy import Column, Float, Integer, String, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, DateTime, Enum, ForeignKey, Text
 from sqlalchemy.sql import func
 import enum
 
@@ -92,6 +92,31 @@ class GPSLocation(Base):
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Geofence(Base):
+    __tablename__ = "geofences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    radius_meters = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class SecurityEvent(Base):
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
+    geofence_id = Column(Integer, ForeignKey("geofences.id"), nullable=True, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

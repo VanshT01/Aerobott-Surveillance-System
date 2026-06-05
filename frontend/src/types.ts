@@ -50,6 +50,34 @@ export interface EventItem {
   snapshot: string;
 }
 
+export interface Geofence {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface GeofencePayload {
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+}
+
+export interface SecurityEvent {
+  id: number;
+  event_type: string;
+  device_id: number;
+  geofence_id: number | null;
+  latitude: number;
+  longitude: number;
+  message: string;
+  created_at: string;
+}
+
 export interface WebRTCAnswer {
   sdp: string;
   type: RTCSdpType;

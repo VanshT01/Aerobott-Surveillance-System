@@ -22,6 +22,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from app.services.video.webrtc import CameraVideoTrack
 from app.services.video.recording import start_recording, stop_recording, is_recording
 from app.services.telemetry.mqtt import get_mqtt_config, start_mqtt_listener
+from app.services.geofencing.monitor import monitor_geofence_alerts
 from app.services.vision.drone_crowd_counting import estimate_crowd, get_model_status
 import os
 
@@ -157,6 +158,11 @@ def startup_event():
     )
 
     monitor_thread.start()
+    geofence_thread = threading.Thread(
+        target=monitor_geofence_alerts,
+        daemon=True
+    )
+    geofence_thread.start()
     mqtt_client = start_mqtt_listener()
 
 @app.post("/devices/{device_id}/check-stream", response_model=schemas.DeviceResponse)
@@ -454,6 +460,55 @@ def list_gps_locations(
     db: Session = Depends(get_db)
 ):
     return crud.get_gps_locations(db, device_id, limit)
+
+
+@app.post("/geofences", response_model=schemas.GeofenceResponse)
+def create_geofence(geofence: schemas.GeofenceCreate, db: Session = Depends(get_db)):
+    if geofence.radius_meters <= 0:
+        raise HTTPException(status_code=400, detail="Geofence radius must be greater than 0")
+
+    return crud.create_geofence(db, geofence)
+
+
+@app.get("/geofences", response_model=list[schemas.GeofenceResponse])
+def list_geofences(db: Session = Depends(get_db)):
+    return crud.get_geofences(db)
+
+
+@app.patch("/geofences/{geofence_id}", response_model=schemas.GeofenceResponse)
+def update_geofence(
+    geofence_id: int,
+    geofence_update: schemas.GeofenceUpdate,
+    db: Session = Depends(get_db)
+):
+    if geofence_update.radius_meters is not None and geofence_update.radius_meters <= 0:
+        raise HTTPException(status_code=400, detail="Geofence radius must be greater than 0")
+
+    geofence = crud.update_geofence(db, geofence_id, geofence_update)
+
+    if not geofence:
+        raise HTTPException(status_code=404, detail="Geofence not found")
+
+    return geofence
+
+
+@app.delete("/geofences/{geofence_id}")
+def delete_geofence(geofence_id: int, db: Session = Depends(get_db)):
+    geofence = crud.delete_geofence(db, geofence_id)
+
+    if not geofence:
+        raise HTTPException(status_code=404, detail="Geofence not found")
+
+    return {"message": "Geofence deleted successfully"}
+
+
+@app.get("/security-events", response_model=list[schemas.SecurityEventResponse])
+def list_security_events(
+    device_id: int | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    return crud.get_security_events(db, device_id, limit)
 
 
 @app.get("/recordings/{recording_id}/download")

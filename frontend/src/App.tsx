@@ -6,12 +6,17 @@ import { StatusPanel } from "./components/StatusPanel";
 import { StreamPanel } from "./components/StreamPanel";
 import { TrackingMap } from "./components/TrackingMap";
 import { EventFeed } from "./components/EventFeed";
+import { GeofenceManagement } from "./components/GeofenceManagement";
+import { SecurityAlerts } from "./components/SecurityAlerts";
+import type { Geofence, SecurityEvent } from "./types";
 
 const STORAGE_KEY = "surveillance_selected_device_id";
 const DEVICE_REFRESH_MS = 3000;
 
 export function App() {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [geofences, setGeofences] = useState<Geofence[]>([]);
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clock, setClock] = useState(new Date());
@@ -44,13 +49,35 @@ export function App() {
     loadDevices();
   }, [loadDevices]);
 
+  const loadGeofences = useCallback(async () => {
+    try {
+      setGeofences(await api.listGeofences());
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load geofences");
+    }
+  }, []);
+
+  const loadSecurityEvents = useCallback(async () => {
+    try {
+      setSecurityEvents(await api.securityEvents());
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load security alerts");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGeofences();
+    loadSecurityEvents();
+  }, [loadGeofences, loadSecurityEvents]);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       loadDevices();
+      loadSecurityEvents();
     }, DEVICE_REFRESH_MS);
 
     return () => window.clearInterval(timer);
-  }, [loadDevices]);
+  }, [loadDevices, loadSecurityEvents]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
@@ -91,10 +118,12 @@ export function App() {
       </section>
 
       <StatusPanel selectedDevice={selectedDevice} />
-      <TrackingMap devices={devices} />
+      <TrackingMap devices={devices} geofences={geofences} />
 
       <StreamPanel selectedDevice={selectedDevice} onDeviceChanged={loadDevices} />
 
+      <SecurityAlerts events={securityEvents} />
+      <GeofenceManagement geofences={geofences} onChanged={loadGeofences} />
       <EventFeed selectedDevice={selectedDevice} />
       <DeviceManagement devices={devices} onChanged={loadDevices} />
     </main>

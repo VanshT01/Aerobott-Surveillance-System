@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -143,6 +143,154 @@ class BackendCoreTest(unittest.TestCase):
             self.assertEqual(updated.longitude, "72.82")
             self.assertEqual(updated.status, models.DeviceStatus.online)
             self.assertEqual(len(locations), 1)
+
+    def test_geofence_exit_creates_security_event(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+
+        crud.store_gps_location(
+            self.db,
+            device_id=drone.id,
+            latitude=19.086,
+            longitude=72.877,
+        )
+
+        events = crud.get_security_events(self.db)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "geofence_exit")
+        self.assertEqual(events[0].device_id, drone.id)
+        self.assertIn("outside geofence Base", events[0].message)
+
+    def test_geofence_exit_creates_event_for_each_outside_geofence(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base A",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base B",
+                latitude=19.08,
+                longitude=72.88,
+                radius_meters=100,
+            ),
+        )
+
+        crud.store_gps_location(
+            self.db,
+            device_id=drone.id,
+            latitude=19.086,
+            longitude=72.877,
+        )
+
+        events = crud.get_security_events(self.db)
+        messages = {event.message for event in events}
+
+        self.assertEqual(len(events), 2)
+        self.assertTrue(any("Base A" in message for message in messages))
+        self.assertTrue(any("Base B" in message for message in messages))
+
+    def test_geofence_inside_does_not_create_security_event(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+
+        crud.store_gps_location(
+            self.db,
+            device_id=drone.id,
+            latitude=19.0761,
+            longitude=72.877,
+        )
+
+        self.assertEqual(crud.get_security_events(self.db), [])
+
+    def test_create_geofence_evaluates_existing_drone_location(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.store_gps_location(
+            self.db,
+            device_id=drone.id,
+            latitude=19.086,
+            longitude=72.877,
+        )
+
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+
+        events = crud.get_security_events(self.db)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event_type, "geofence_exit")
+        self.assertEqual(events[0].device_id, drone.id)
+
+    def test_gps_updates_can_create_alert_every_minute(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+        crud.store_gps_location(self.db, drone.id, 19.086, 72.877)
+        first_event = crud.get_security_events(self.db)[0]
+        first_event.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+        self.db.commit()
+
+        crud.store_gps_location(self.db, drone.id, 19.0861, 72.877)
+
+        self.assertEqual(len(crud.get_security_events(self.db)), 2)
+
+    def test_stale_monitor_suppresses_alerts_for_five_minutes(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+        crud.create_geofence(
+            self.db,
+            schemas.GeofenceCreate(
+                name="Base",
+                latitude=19.076,
+                longitude=72.877,
+                radius_meters=100,
+            ),
+        )
+        crud.store_gps_location(self.db, drone.id, 19.086, 72.877)
+
+        created_events = crud.evaluate_all_drone_geofences(
+            self.db,
+            cooldown_seconds=crud.STALE_GEOFENCE_ALERT_COOLDOWN_SECONDS
+        )
+
+        self.assertEqual(created_events, [])
+        self.assertEqual(len(crud.get_security_events(self.db)), 1)
 
 
 if __name__ == "__main__":

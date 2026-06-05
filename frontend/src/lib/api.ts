@@ -3,7 +3,10 @@ import type {
   Device,
   DevicePayload,
   EventItem,
+  Geofence,
+  GeofencePayload,
   RecordingStatus,
+  SecurityEvent,
   WebRTCAnswer
 } from "../types";
 
@@ -41,6 +44,13 @@ export const api = {
   startRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/start`, { method: "POST" }),
   stopRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/stop`, { method: "POST" }),
   events: (cameraId: number, limit = 20) => request<EventItem[]>(`/events?camera_id=${cameraId}&limit=${limit}`),
+  listGeofences: () => request<Geofence[]>("/geofences"),
+  createGeofence: (payload: GeofencePayload) =>
+    request<Geofence>("/geofences", { method: "POST", body: JSON.stringify(payload) }),
+  updateGeofence: (id: number, payload: Partial<GeofencePayload>) =>
+    request<Geofence>(`/geofences/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteGeofence: (id: number) => request<{ message: string }>(`/geofences/${id}`, { method: "DELETE" }),
+  securityEvents: (limit = 20) => request<SecurityEvent[]>(`/security-events?limit=${limit}`),
   webrtcOffer: (id: number, offer: RTCSessionDescriptionInit) =>
     request<WebRTCAnswer>(`/devices/${id}/webrtc`, { method: "POST", body: JSON.stringify(offer) })
 };

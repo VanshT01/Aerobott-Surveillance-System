@@ -50,6 +50,30 @@ uvicorn app.main:app --app-dir backend
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
+## Geofencing
+
+Create circular geofences with:
+
+```text
+POST /geofences
+GET /geofences
+PATCH /geofences/{geofence_id}
+DELETE /geofences/{geofence_id}
+```
+
+When drone GPS telemetry updates, the backend checks whether the drone is inside at least one geofence. If it is outside all configured geofences, it creates a `geofence_exit` security event. Recent alerts are available at:
+
+```text
+GET /security-events
+```
+
+Alert cadence:
+
+```text
+GPS updates while outside: at most once every 60 seconds
+No GPS updates while outside: background watchdog re-alerts at most once every 5 minutes
+```
+
 ## Drone Crowd Counting
 
 The backend uses a CSRNet model for drone crowd counting.

@@ -115,3 +115,44 @@ class DroneCrowdCountResponse(BaseModel):
     model_name: str
     model_path: str
     runtime_device: str
+
+
+class GeofenceCreate(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float
+
+
+class GeofenceUpdate(BaseModel):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_meters: Optional[float] = None
+
+
+class GeofenceResponse(BaseModel):
+    id: int
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: float
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class SecurityEventResponse(BaseModel):
+    id: int
+    event_type: str
+    device_id: int
+    geofence_id: Optional[int]
+    latitude: float
+    longitude: float
+    message: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

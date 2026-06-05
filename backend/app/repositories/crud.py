@@ -1,8 +1,34 @@
 # handles the database actions
+import math
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
 
 from app.db import models
 from app import schemas
+
+
+EARTH_RADIUS_METERS = 6371000
+GPS_GEOFENCE_ALERT_COOLDOWN_SECONDS = 60
+STALE_GEOFENCE_ALERT_COOLDOWN_SECONDS = 300
+
+
+def distance_meters(lat1: float, lon1: float, lat2: float, lon2: float):
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+
+    delta_lat = lat2_rad - lat1_rad
+    delta_lon = lon2_rad - lon1_rad
+
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return EARTH_RADIUS_METERS * c
 
 
 def create_device(db: Session, device: schemas.DeviceCreate):
@@ -55,6 +81,9 @@ def delete_device(db: Session, device_id: int):
     ).delete()
     db.query(models.GPSLocation).filter(
         models.GPSLocation.device_id == device_id
+    ).delete()
+    db.query(models.SecurityEvent).filter(
+        models.SecurityEvent.device_id == device_id
     ).delete()
 
     db.delete(db_device)
@@ -177,6 +206,7 @@ def store_gps_location(db: Session, device_id: int, latitude: float, longitude: 
     db.add(location)
     db.commit()
     db.refresh(location)
+    evaluate_geofence_exit(db, device, latitude, longitude)
 
     return location
 
@@ -188,3 +218,207 @@ def get_gps_locations(db: Session, device_id: int | None = None, limit: int = 10
         query = query.filter(models.GPSLocation.device_id == device_id)
 
     return query.order_by(models.GPSLocation.created_at.desc()).limit(limit).all()
+
+
+def create_geofence(db: Session, geofence: schemas.GeofenceCreate):
+    db_geofence = models.Geofence(**geofence.model_dump())
+    db.add(db_geofence)
+    db.commit()
+    db.refresh(db_geofence)
+    evaluate_all_drone_geofences(db)
+    return db_geofence
+
+
+def get_geofences(db: Session):
+    return db.query(models.Geofence).order_by(models.Geofence.name.asc()).all()
+
+
+def get_geofence(db: Session, geofence_id: int):
+    return db.query(models.Geofence).filter(models.Geofence.id == geofence_id).first()
+
+
+def update_geofence(db: Session, geofence_id: int, geofence_update: schemas.GeofenceUpdate):
+    geofence = get_geofence(db, geofence_id)
+
+    if not geofence:
+        return None
+
+    update_data = geofence_update.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(geofence, key, value)
+
+    db.commit()
+    db.refresh(geofence)
+    evaluate_all_drone_geofences(db)
+
+    return geofence
+
+
+def delete_geofence(db: Session, geofence_id: int):
+    geofence = get_geofence(db, geofence_id)
+
+    if not geofence:
+        return None
+
+    db.query(models.SecurityEvent).filter(
+        models.SecurityEvent.geofence_id == geofence_id
+    ).delete()
+    db.delete(geofence)
+    db.commit()
+
+    return geofence
+
+
+def get_security_events(
+    db: Session,
+    device_id: int | None = None,
+    limit: int = 50
+):
+    query = db.query(models.SecurityEvent)
+
+    if device_id is not None:
+        query = query.filter(models.SecurityEvent.device_id == device_id)
+
+    return query.order_by(models.SecurityEvent.created_at.desc()).limit(limit).all()
+
+
+def create_security_event(
+    db: Session,
+    event_type: str,
+    device_id: int,
+    geofence_id: int | None,
+    latitude: float,
+    longitude: float,
+    message: str
+):
+    event = models.SecurityEvent(
+        event_type=event_type,
+        device_id=device_id,
+        geofence_id=geofence_id,
+        latitude=latitude,
+        longitude=longitude,
+        message=message
+    )
+
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
+def get_recent_security_event(
+    db: Session,
+    event_type: str,
+    device_id: int,
+    geofence_id: int | None,
+    cooldown_seconds: int = GPS_GEOFENCE_ALERT_COOLDOWN_SECONDS
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=cooldown_seconds)
+    query = (
+        db.query(models.SecurityEvent)
+        .filter(models.SecurityEvent.event_type == event_type)
+        .filter(models.SecurityEvent.device_id == device_id)
+        .filter(models.SecurityEvent.created_at >= cutoff)
+    )
+
+    if geofence_id is None:
+        query = query.filter(models.SecurityEvent.geofence_id.is_(None))
+    else:
+        query = query.filter(models.SecurityEvent.geofence_id == geofence_id)
+
+    return query.order_by(models.SecurityEvent.created_at.desc()).first()
+
+
+def evaluate_geofence_exit(
+    db: Session,
+    device,
+    latitude: float,
+    longitude: float,
+    cooldown_seconds: int = GPS_GEOFENCE_ALERT_COOLDOWN_SECONDS
+):
+    geofences = get_geofences(db)
+
+    if not geofences:
+        return []
+
+    created_events = []
+
+    for geofence in geofences:
+        distance = distance_meters(
+            latitude,
+            longitude,
+            geofence.latitude,
+            geofence.longitude
+        )
+
+        if distance <= geofence.radius_meters:
+            continue
+
+        event_type = "geofence_exit"
+
+        recent_event = get_recent_security_event(
+            db=db,
+            event_type=event_type,
+            device_id=device.id,
+            geofence_id=geofence.id,
+            cooldown_seconds=cooldown_seconds
+        )
+
+        if recent_event:
+            continue
+
+        outside_by = max(0, distance - geofence.radius_meters)
+        message = (
+            f"{device.name} is outside geofence {geofence.name} "
+            f"by {outside_by:.1f} meters"
+        )
+
+        created_events.append(
+            create_security_event(
+                db=db,
+                event_type=event_type,
+                device_id=device.id,
+                geofence_id=geofence.id,
+                latitude=latitude,
+                longitude=longitude,
+                message=message
+            )
+        )
+
+    return created_events
+
+
+def evaluate_all_drone_geofences(
+    db: Session,
+    cooldown_seconds: int = STALE_GEOFENCE_ALERT_COOLDOWN_SECONDS
+):
+    drones = (
+        db.query(models.Device)
+        .filter(models.Device.device_type == models.DeviceType.drone)
+        .filter(models.Device.latitude.isnot(None))
+        .filter(models.Device.longitude.isnot(None))
+        .all()
+    )
+
+    created_events = []
+
+    for drone in drones:
+        try:
+            latitude = float(drone.latitude)
+            longitude = float(drone.longitude)
+        except (TypeError, ValueError):
+            continue
+
+        events = evaluate_geofence_exit(
+            db=db,
+            device=drone,
+            latitude=latitude,
+            longitude=longitude,
+            cooldown_seconds=cooldown_seconds
+        )
+
+        created_events.extend(events)
+
+    return created_events
