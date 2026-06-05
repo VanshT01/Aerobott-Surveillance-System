@@ -8,7 +8,6 @@ from app.db.session import Base
 
 class DeviceType(str, enum.Enum):
     camera = "camera"
-    gps_tracker = "gps_tracker"
     drone = "drone"
 
 
@@ -104,12 +103,12 @@ class GPSLocation(Base):
 # onvif_url
 # location_name
 
-# for gps tracker:
+# for drone:
 # latitude
 # longitude
 # status
 
-# for future drone can reuse:
+# drone can reuse:
 # rtsp_url
 # latitude
 # longitude

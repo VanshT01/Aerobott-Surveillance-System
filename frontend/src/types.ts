@@ -1,4 +1,4 @@
-export type DeviceType = "camera" | "gps_tracker" | "drone";
+export type DeviceType = "camera" | "drone";
 export type DeviceStatus = "online" | "offline" | "unknown";
 
 export interface Device {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, liveUrl } from "../lib/api";
+import { isVideoDevice } from "../lib/devices";
 import type { Device } from "../types";
 import { MjpegViewer } from "./MjpegViewer";
 import { StreamControls } from "./StreamControls";
@@ -12,15 +13,15 @@ interface Props {
 
 export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [message, setMessage] = useState("Select a camera to view the stream.");
+  const [message, setMessage] = useState("Select a camera or drone to view the stream.");
   const [messageType, setMessageType] = useState<"info" | "error">("info");
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const cameraSelected = selectedDevice?.device_type === "camera";
+  const videoSelected = isVideoDevice(selectedDevice);
 
   useEffect(() => {
     setStreamUrl(null);
-    setMessage(cameraSelected ? "Stream not loaded." : "Select a camera to view the stream.");
+    setMessage(videoSelected ? "Stream not loaded." : "Select a camera or drone to view the stream.");
     setMessageType("info");
 
     if (pc) {
@@ -31,24 +32,24 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [cameraSelected, selectedDevice?.id]);
+  }, [videoSelected, selectedDevice?.id]);
 
   async function refreshStream() {
     setStreamUrl(null);
 
-    if (!selectedDevice || selectedDevice.device_type !== "camera") {
-      setMessage("Select a camera device to view a stream.");
+    if (!isVideoDevice(selectedDevice)) {
+      setMessage("Select a camera or drone device to view a stream.");
       setMessageType("error");
       return;
     }
 
     if (!selectedDevice.rtsp_url?.trim()) {
-      setMessage("This camera does not have an RTSP URL.");
+      setMessage("This device does not have an RTSP URL.");
       setMessageType("error");
       return;
     }
 
-    setMessage("Checking camera stream...");
+    setMessage("Checking video stream...");
     setMessageType("info");
 
     try {
@@ -71,17 +72,17 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   }
 
   async function startRecording() {
-    if (!selectedDevice || selectedDevice.device_type !== "camera") return;
+    if (!isVideoDevice(selectedDevice)) return;
     await api.startRecording(selectedDevice.id);
   }
 
   async function stopRecording() {
-    if (!selectedDevice || selectedDevice.device_type !== "camera") return;
+    if (!isVideoDevice(selectedDevice)) return;
     await api.stopRecording(selectedDevice.id);
   }
 
   async function changeCameraSource() {
-    if (!selectedDevice || selectedDevice.device_type !== "camera") return;
+    if (!isVideoDevice(selectedDevice)) return;
 
     const source = window.prompt("Enter 0 for webcam or paste an RTSP URL:", selectedDevice.rtsp_url ?? "");
     if (!source?.trim()) return;
@@ -92,7 +93,7 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   }
 
   async function startWebRTC() {
-    if (!selectedDevice || selectedDevice.device_type !== "camera") return;
+    if (!isVideoDevice(selectedDevice)) return;
 
     const connection = new RTCPeerConnection();
     connection.addTransceiver("video", { direction: "recvonly" });
@@ -114,7 +115,7 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
       <div className="section-header">
         <h2>Live Video</h2>
         <StreamControls
-          disabled={!cameraSelected}
+          disabled={!videoSelected}
           onRefresh={refreshStream}
           onStartRecording={startRecording}
           onStopRecording={stopRecording}

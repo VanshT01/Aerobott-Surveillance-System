@@ -212,6 +212,27 @@ h3 {
   font-size: 1rem;
 }
 
+.model-path {
+  display: grid;
+  gap: 6px;
+}
+
+.model-path span {
+  color: #6b7785;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.model-path code {
+  overflow-wrap: anywhere;
+  border: 1px solid #e5e9ee;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #52616f;
+  padding: 8px 10px;
+}
+
 .positive {
   color: #18794e;
 }

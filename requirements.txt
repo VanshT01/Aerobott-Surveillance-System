@@ -27,6 +27,8 @@ pyOpenSSL==26.2.0
 python-dotenv==1.2.2
 SQLAlchemy==2.0.50
 starlette==1.2.0
+torch
+torchvision
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 ultralytics==8.4.56

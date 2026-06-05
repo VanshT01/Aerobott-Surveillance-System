@@ -7,8 +7,12 @@ __pycache__/
 recordings/
 backend/recordings/
 backend/events/
+backend/models/*.pth
+backend/models/*.pt
+backend/models/*.ckpt
 
 data/
+DLR_AerialCrowdDataset/
 runs/
 
 frontend/node_modules/

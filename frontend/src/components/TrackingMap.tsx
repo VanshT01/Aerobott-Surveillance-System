@@ -16,7 +16,7 @@ export function TrackingMap({ devices }: Props) {
     () =>
       devices.filter(
         (device) =>
-          ["gps_tracker", "drone"].includes(device.device_type) &&
+          device.device_type === "drone" &&
           hasCoordinates(device)
       ),
     [devices]

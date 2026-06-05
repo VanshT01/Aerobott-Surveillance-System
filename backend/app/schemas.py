@@ -108,3 +108,10 @@ class GPSLocationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class DroneCrowdCountResponse(BaseModel):
+    device_id: int
+    count: float
+    model_name: str
+    model_path: str
+    runtime_device: str

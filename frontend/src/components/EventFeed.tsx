@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, eventSnapshotUrl } from "../lib/api";
+import { isVideoDevice } from "../lib/devices";
 import { formatDate } from "../lib/format";
 import type { Device, EventItem } from "../types";
 
@@ -14,7 +15,7 @@ export function EventFeed({ selectedDevice }: Props) {
     let cancelled = false;
 
     async function load() {
-      if (!selectedDevice || selectedDevice.device_type !== "camera") {
+      if (!isVideoDevice(selectedDevice)) {
         setEvents([]);
         return;
       }

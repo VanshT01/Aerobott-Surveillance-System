@@ -1,12 +1,15 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 import threading
+import cv2
 from app.services.video.rtsp import (
     monitor_cameras,
     check_rtsp_stream,
     get_stream_info,
-    generate_mjpeg_stream
+    generate_mjpeg_stream,
+    get_video_source
 )
 from app.db import models
 from app.db.models import DeviceStatus
@@ -19,6 +22,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from app.services.video.webrtc import CameraVideoTrack
 from app.services.video.recording import start_recording, stop_recording, is_recording
 from app.services.telemetry.mqtt import get_mqtt_config, start_mqtt_listener
+from app.services.vision.drone_crowd_counting import estimate_crowd, get_model_status
 import os
 
 app = FastAPI(
@@ -39,6 +43,17 @@ mqtt_client = None
 class WebRTCOffer(BaseModel):
     sdp: str
     type: str
+
+
+def is_video_device(device):
+    return device.device_type in [models.DeviceType.camera, models.DeviceType.drone]
+
+
+def migrate_legacy_gps_trackers():
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE devices SET device_type = 'drone' WHERE device_type = 'gps_tracker'")
+        )
 
 
 @app.get("/")
@@ -91,6 +106,7 @@ def replace_device(
 
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int, db: Session = Depends(get_db)):
+    stop_recording(device_id)
     device = crud.delete_device(db, device_id)
 
     if not device:
@@ -133,6 +149,7 @@ def startup_event():
     global mqtt_client
 
     models.Base.metadata.create_all(bind=engine)
+    migrate_legacy_gps_trackers()
 
     monitor_thread = threading.Thread(
         target=monitor_cameras,
@@ -149,11 +166,11 @@ def check_device_stream(device_id: int, db: Session = Depends(get_db)):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
+    if not is_video_device(device):
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
 
     if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
+        raise HTTPException(status_code=400, detail="Device does not have an RTSP URL")
 
     online = check_rtsp_stream(device.rtsp_url)
 
@@ -170,11 +187,11 @@ def get_device_stream_info(device_id: int, db: Session = Depends(get_db)):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
+    if not is_video_device(device):
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
 
     if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
+        raise HTTPException(status_code=400, detail="Device does not have an RTSP URL")
 
     info = get_stream_info(device.rtsp_url)
 
@@ -192,14 +209,14 @@ def live_view(device_id: int, db: Session = Depends(get_db)):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
+    if not is_video_device(device):
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
 
     if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
+        raise HTTPException(status_code=400, detail="Device does not have an RTSP URL")
 
     if not check_rtsp_stream(device.rtsp_url):
-        raise HTTPException(status_code=503, detail="Camera stream is unavailable")
+        raise HTTPException(status_code=503, detail="Video stream is unavailable")
 
     return StreamingResponse(
         generate_mjpeg_stream(device.id, device.rtsp_url),
@@ -236,11 +253,11 @@ async def webrtc_offer(device_id: int, offer: WebRTCOffer, db: Session = Depends
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
+    if not is_video_device(device):
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
 
     if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
+        raise HTTPException(status_code=400, detail="Device does not have an RTSP URL")
 
     pc = RTCPeerConnection()
     pcs.add(pc)
@@ -278,11 +295,11 @@ def start_device_recording(device_id: int, db: Session = Depends(get_db)):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.camera:
-        raise HTTPException(status_code=400, detail="Device is not a camera")
+    if not is_video_device(device):
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
 
     if not device.rtsp_url:
-        raise HTTPException(status_code=400, detail="Camera does not have an RTSP URL")
+        raise HTTPException(status_code=400, detail="Device does not have an RTSP URL")
 
     started = start_recording(device.id, device.rtsp_url)
 
@@ -325,6 +342,52 @@ def get_recording_status(device_id: int):
 @app.get("/recordings", response_model=list[schemas.RecordingResponse])
 def list_recordings(camera_id: int | None = None, db: Session = Depends(get_db)):
     return crud.get_recordings(db, camera_id)
+
+
+@app.get("/drone-crowd-count/model/status")
+def drone_crowd_model_status():
+    return get_model_status()
+
+
+@app.post("/devices/{device_id}/drone-crowd-count", response_model=schemas.DroneCrowdCountResponse)
+def run_device_drone_crowd_count(device_id: int, db: Session = Depends(get_db)):
+    device = crud.get_device(db, device_id)
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if device.device_type not in [models.DeviceType.camera, models.DeviceType.drone]:
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
+
+    if not device.rtsp_url:
+        raise HTTPException(status_code=400, detail="Device does not have a video source")
+
+    source = get_video_source(device.rtsp_url)
+
+    if source is None:
+        raise HTTPException(status_code=400, detail="Device does not have a video source")
+
+    cap = cv2.VideoCapture(source)
+
+    if not cap.isOpened():
+        cap.release()
+        raise HTTPException(status_code=503, detail="Video stream is unavailable")
+
+    success, frame = cap.read()
+    cap.release()
+
+    if not success:
+        raise HTTPException(status_code=503, detail="Could not read video frame")
+
+    try:
+        result = estimate_crowd(frame)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error))
+
+    return {
+        "device_id": device.id,
+        **result
+    }
 
 
 @app.get("/events", response_model=list[schemas.EventResponse])
@@ -373,8 +436,8 @@ def create_gps_location(
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    if device.device_type != models.DeviceType.gps_tracker:
-        raise HTTPException(status_code=400, detail="Device is not a GPS tracker")
+    if device.device_type != models.DeviceType.drone:
+        raise HTTPException(status_code=400, detail="Device is not a drone")
 
     return crud.store_gps_location(
         db=db,

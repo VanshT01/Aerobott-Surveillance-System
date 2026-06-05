@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { isVideoDevice } from "../lib/devices";
 import { formatValue } from "../lib/format";
 import type { CameraDashboard, Device, RecordingStatus } from "../types";
 
@@ -15,7 +16,7 @@ export function StatusPanel({ selectedDevice }: Props) {
     let cancelled = false;
 
     async function load() {
-      if (!selectedDevice || selectedDevice.device_type !== "camera") {
+      if (!isVideoDevice(selectedDevice)) {
         setDashboard(null);
         setRecording(null);
         return;
@@ -59,7 +60,7 @@ export function StatusPanel({ selectedDevice }: Props) {
       </div>
       <div>
         <span>Recording</span>
-        <strong>{recording?.recording ? "Recording" : selectedDevice?.device_type === "camera" ? "Not recording" : "N/A"}</strong>
+        <strong>{recording?.recording ? "Recording" : isVideoDevice(selectedDevice) ? "Not recording" : "N/A"}</strong>
       </div>
       <div>
         <span>Resolution</span>

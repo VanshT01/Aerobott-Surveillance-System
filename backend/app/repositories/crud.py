@@ -44,6 +44,19 @@ def delete_device(db: Session, device_id: int):
     if not db_device:
         return None
 
+    db.query(models.CameraCredentials).filter(
+        models.CameraCredentials.device_id == device_id
+    ).delete()
+    db.query(models.Recording).filter(
+        models.Recording.camera_id == device_id
+    ).delete()
+    db.query(models.Event).filter(
+        models.Event.camera_id == device_id
+    ).delete()
+    db.query(models.GPSLocation).filter(
+        models.GPSLocation.device_id == device_id
+    ).delete()
+
     db.delete(db_device)
     db.commit()
 
@@ -148,7 +161,7 @@ def store_gps_location(db: Session, device_id: int, latitude: float, longitude: 
     if not device:
         return None
 
-    if device.device_type != models.DeviceType.gps_tracker:
+    if device.device_type != models.DeviceType.drone:
         return None
 
     device.latitude = str(latitude)
@@ -175,4 +188,3 @@ def get_gps_locations(db: Session, device_id: int | None = None, limit: int = 10
         query = query.filter(models.GPSLocation.device_id == device_id)
 
     return query.order_by(models.GPSLocation.created_at.desc()).limit(limit).all()
-

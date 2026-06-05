@@ -8,6 +8,7 @@ import { TrackingMap } from "./components/TrackingMap";
 import { EventFeed } from "./components/EventFeed";
 
 const STORAGE_KEY = "surveillance_selected_device_id";
+const DEVICE_REFRESH_MS = 3000;
 
 export function App() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -41,6 +42,14 @@ export function App() {
 
   useEffect(() => {
     loadDevices();
+  }, [loadDevices]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      loadDevices();
+    }, DEVICE_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
   }, [loadDevices]);
 
   useEffect(() => {

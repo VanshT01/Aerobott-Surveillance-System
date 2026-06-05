@@ -59,7 +59,7 @@ def handle_tracker_payload(topic: str, payload_bytes: bytes):
         )
 
         if not location:
-            print(f"MQTT GPS device {device_id} was not found or is not a gps_tracker")
+            print(f"MQTT GPS device {device_id} was not found or is not a drone")
             return
 
         print(f"Stored MQTT GPS location for device {device_id}: {latitude}, {longitude}")
@@ -69,7 +69,7 @@ def handle_tracker_payload(topic: str, payload_bytes: bytes):
 
 def start_mqtt_listener():
     if mqtt is None:
-        print("MQTT disabled: install paho-mqtt to receive GPS tracker telemetry")
+        print("MQTT disabled: install paho-mqtt to receive drone telemetry")
         return None
 
     host = os.getenv("MQTT_HOST", "localhost")

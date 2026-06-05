@@ -77,24 +77,24 @@ def monitor_cameras():
 
         db = SessionLocal()
 
-        cameras = (
+        video_devices = (
             db.query(Device)
-            .filter(Device.device_type == DeviceType.camera)
+            .filter(Device.device_type.in_([DeviceType.camera, DeviceType.drone]))
             .all()
         )
 
-        for camera in cameras:
+        for device in video_devices:
 
-            print(f"Checking {camera.name}")
+            print(f"Checking {device.name}")
 
             online = check_rtsp_stream(
-                camera.rtsp_url
+                device.rtsp_url
             )
 
             if online:
-                camera.status = DeviceStatus.online
+                device.status = DeviceStatus.online
             else:
-                camera.status = DeviceStatus.offline
+                device.status = DeviceStatus.offline
 
         db.commit()
         db.close()

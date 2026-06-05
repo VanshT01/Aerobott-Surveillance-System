@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import { formatDate, formatValue } from "../lib/format";
 import type { Device, DevicePayload, DeviceStatus, DeviceType } from "../types";
@@ -56,6 +56,7 @@ function toPayload(form: DeviceFormState, includeStatus: boolean): DevicePayload
 export function DeviceManagement({ devices, onChanged }: Props) {
   const [form, setForm] = useState<DeviceFormState>(blankForm);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     if (form.id && !devices.some((device) => device.id === form.id)) {
@@ -81,9 +82,13 @@ export function DeviceManagement({ devices, onChanged }: Props) {
       location_name: device.location_name ?? ""
     });
     setError(null);
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      formRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    });
   }
 
-  async function save(event: React.FormEvent) {
+  async function save(event: FormEvent) {
     event.preventDefault();
 
     if (!form.name.trim()) {
@@ -111,20 +116,29 @@ export function DeviceManagement({ devices, onChanged }: Props) {
 
   async function remove(device: Device) {
     if (!window.confirm(`Delete ${device.name}?`)) return;
-    await api.deleteDevice(device.id);
-    await onChanged();
+
+    try {
+      await api.deleteDevice(device.id);
+      if (form.id === device.id) {
+        setForm(blankForm);
+      }
+      setError(null);
+      await onChanged();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Failed to delete device.");
+    }
   }
 
   return (
     <section className="panel">
       <div className="section-header">
         <h2>Device Management</h2>
-        <button onClick={() => setForm(blankForm)}>New Device</button>
+        <button type="button" onClick={() => setForm(blankForm)}>New Device</button>
       </div>
 
       {error && <div className="notice error">{error}</div>}
 
-      <form className="device-form" onSubmit={save}>
+      <form ref={formRef} className="device-form" onSubmit={save}>
         <label>
           Name
           <input value={form.name} onChange={(event) => update("name", event.target.value)} required />
@@ -133,7 +147,6 @@ export function DeviceManagement({ devices, onChanged }: Props) {
           Type
           <select value={form.device_type} onChange={(event) => update("device_type", event.target.value as DeviceType)}>
             <option value="camera">camera</option>
-            <option value="gps_tracker">gps_tracker</option>
             <option value="drone">drone</option>
           </select>
         </label>
@@ -205,8 +218,8 @@ export function DeviceManagement({ devices, onChanged }: Props) {
                 <td>{formatValue(device.latitude)} / {formatValue(device.longitude)}</td>
                 <td>{formatDate(device.updated_at)}</td>
                 <td>
-                  <button onClick={() => edit(device)}>Edit</button>
-                  <button className="danger" onClick={() => remove(device)}>Delete</button>
+                  <button type="button" onClick={() => edit(device)}>Edit</button>
+                  <button type="button" className="danger" onClick={() => remove(device)}>Delete</button>
                 </td>
               </tr>
             ))}
