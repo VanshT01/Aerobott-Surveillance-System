@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app import schemas
+from app.services.notifications import webhooks
 
 
 EARTH_RADIUS_METERS = 6371000
@@ -167,6 +168,7 @@ def create_event(db: Session, camera_id: int, event_type: str, event_time, snaps
     db.add(event)
     db.commit()
     db.refresh(event)
+    webhooks.notify_event(event)
 
     return event
 
@@ -330,6 +332,7 @@ def create_security_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+    webhooks.notify_security_alert(event)
 
     return event
 

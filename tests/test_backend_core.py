@@ -4,6 +4,7 @@ import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -14,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ["WEBHOOK_URL"] = ""
+os.environ["EVENT_WEBHOOK_URL"] = ""
+os.environ["SECURITY_ALERT_WEBHOOK_URL"] = ""
 
 from app import schemas
 from app.db import models
@@ -250,6 +254,97 @@ class BackendCoreTest(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].event_type, "geofence_exit")
         self.assertEqual(events[0].device_id, drone.id)
+
+    def test_detection_event_dispatches_webhook_payload(self):
+        camera = self.create_device("Camera 1", models.DeviceType.camera)
+        event_time = datetime.now(timezone.utc)
+
+        with patch("app.services.notifications.webhooks.dispatch_webhook") as dispatch:
+            event = crud.create_event(
+                db=self.db,
+                camera_id=camera.id,
+                event_type="Person detected",
+                event_time=event_time,
+                snapshot="/tmp/snapshot.jpg",
+            )
+
+        dispatch.assert_called_once()
+        _, payload = dispatch.call_args.args
+
+        self.assertEqual(payload["text"], f"Detection event: Person detected on camera {camera.id}")
+        self.assertEqual(payload["type"], "event")
+        self.assertEqual(payload["event"]["id"], event.id)
+        self.assertEqual(payload["event"]["camera_id"], camera.id)
+        self.assertEqual(payload["event"]["type"], "Person detected")
+        self.assertEqual(payload["event"]["time"], event.time.isoformat())
+
+    def test_delete_events_can_clear_by_camera(self):
+        camera = self.create_device("Camera 1", models.DeviceType.camera)
+        other_camera = self.create_device("Camera 2", models.DeviceType.camera)
+        event_time = datetime.now(timezone.utc)
+
+        with patch("app.services.notifications.webhooks.dispatch_webhook"):
+            crud.create_event(self.db, camera.id, "Person detected", event_time, "/tmp/one.jpg")
+            crud.create_event(self.db, camera.id, "Vehicle detected", event_time, "/tmp/two.jpg")
+            crud.create_event(self.db, other_camera.id, "Person detected", event_time, "/tmp/three.jpg")
+
+        deleted_count = crud.delete_events(self.db, camera.id)
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(crud.get_events(self.db, camera.id), [])
+        self.assertEqual(len(crud.get_events(self.db, other_camera.id)), 1)
+
+    def test_security_alert_dispatches_webhook_payload(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+
+        with patch("app.services.notifications.webhooks.dispatch_webhook") as dispatch:
+            event = crud.create_security_event(
+                db=self.db,
+                event_type="geofence_exit",
+                device_id=drone.id,
+                geofence_id=None,
+                latitude=19.086,
+                longitude=72.877,
+                message="Drone 1 exited configured area",
+            )
+
+        dispatch.assert_called_once()
+        _, payload = dispatch.call_args.args
+
+        self.assertEqual(payload["text"], "Security alert: Drone 1 exited configured area")
+        self.assertEqual(payload["type"], "security_alert")
+        self.assertEqual(payload["security_alert"]["id"], event.id)
+        self.assertEqual(payload["security_alert"]["device_id"], drone.id)
+        self.assertEqual(payload["security_alert"]["event_type"], "geofence_exit")
+        self.assertEqual(payload["security_alert"]["message"], "Drone 1 exited configured area")
+
+    def test_delete_security_events_can_clear_all(self):
+        drone = self.create_device("Drone 1", models.DeviceType.drone)
+
+        with patch("app.services.notifications.webhooks.dispatch_webhook"):
+            crud.create_security_event(
+                self.db,
+                "geofence_exit",
+                drone.id,
+                None,
+                19.086,
+                72.877,
+                "Drone 1 exited configured area",
+            )
+            crud.create_security_event(
+                self.db,
+                "geofence_exit",
+                drone.id,
+                None,
+                19.087,
+                72.878,
+                "Drone 1 is still outside configured area",
+            )
+
+        deleted_count = crud.delete_security_events(self.db)
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(crud.get_security_events(self.db), [])
 
     def test_gps_updates_can_create_alert_every_minute(self):
         drone = self.create_device("Drone 1", models.DeviceType.drone)

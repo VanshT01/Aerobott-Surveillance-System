@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, eventSnapshotUrl } from "../lib/api";
 import { isVideoDevice } from "../lib/devices";
 import { formatDate } from "../lib/format";
@@ -13,35 +13,29 @@ export function EventFeed({ selectedDevice }: Props) {
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      if (!isVideoDevice(selectedDevice)) {
-        setEvents([]);
-        return;
-      }
-
-      try {
-        const data = await api.events(selectedDevice.id);
-        if (!cancelled) {
-          setEvents(data);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setEvents([]);
-        }
-      }
+  const loadEvents = useCallback(async () => {
+    if (!isVideoDevice(selectedDevice)) {
+      setEvents([]);
+      return;
     }
 
-    load();
-    const timer = window.setInterval(load, 5000);
+    try {
+      const data = await api.events(selectedDevice.id);
+      setEvents(data);
+      setError(null);
+    } catch (loadError) {
+      setEvents([]);
+      setError(loadError instanceof Error ? loadError.message : "Failed to load event feed.");
+    }
+  }, [selectedDevice?.id]);
+
+  useEffect(() => {
+    loadEvents();
+    const timer = window.setInterval(loadEvents, 5000);
     return () => {
-      cancelled = true;
       window.clearInterval(timer);
     };
-  }, [selectedDevice]);
+  }, [loadEvents]);
 
   async function clearEvents() {
     if (!isVideoDevice(selectedDevice) || events.length === 0) return;
@@ -50,7 +44,7 @@ export function EventFeed({ selectedDevice }: Props) {
     try {
       setClearing(true);
       await api.deleteEvents(selectedDevice.id);
-      setEvents([]);
+      await loadEvents();
       setError(null);
     } catch (clearError) {
       setError(clearError instanceof Error ? clearError.message : "Failed to clear event feed.");

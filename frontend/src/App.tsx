@@ -109,7 +109,7 @@ export function App() {
     try {
       setClearingSecurityEvents(true);
       await api.deleteSecurityEvents();
-      setSecurityEvents([]);
+      await loadSecurityEvents();
       setSecurityClearError(null);
     } catch (clearError) {
       setSecurityClearError(
