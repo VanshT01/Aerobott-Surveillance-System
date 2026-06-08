@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, liveUrl } from "../lib/api";
 import { isVideoDevice } from "../lib/devices";
-import type { Device } from "../types";
+import type { CameraDashboard, Device } from "../types";
 import { MjpegViewer } from "./MjpegViewer";
 import { StreamControls } from "./StreamControls";
 import { WebRTCViewer } from "./WebRTCViewer";
@@ -16,11 +16,15 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   const [message, setMessage] = useState("Select a camera or drone to view the stream.");
   const [messageType, setMessageType] = useState<"info" | "error">("info");
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
+  const [dashboard, setDashboard] = useState<CameraDashboard | null>(null);
+  const [webrtcLive, setWebrtcLive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoSelected = isVideoDevice(selectedDevice);
 
   useEffect(() => {
     setStreamUrl(null);
+    setDashboard(null);
+    setWebrtcLive(false);
     setMessage(videoSelected ? "Stream not loaded." : "Select a camera or drone to view the stream.");
     setMessageType("info");
 
@@ -33,6 +37,31 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
       videoRef.current.srcObject = null;
     }
   }, [videoSelected, selectedDevice?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      if (!isVideoDevice(selectedDevice) || selectedDevice.status !== "online") {
+        setDashboard(null);
+        return;
+      }
+
+      try {
+        const data = await api.dashboard(selectedDevice.id);
+        if (!cancelled) setDashboard(data);
+      } catch {
+        if (!cancelled) setDashboard(null);
+      }
+    }
+
+    loadDashboard();
+    const timer = window.setInterval(loadDashboard, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedDevice?.id, selectedDevice?.status, videoSelected]);
 
   async function refreshStream() {
     setStreamUrl(null);
@@ -95,11 +124,18 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
   async function startWebRTC() {
     if (!isVideoDevice(selectedDevice)) return;
 
+    setWebrtcLive(false);
     const connection = new RTCPeerConnection();
     connection.addTransceiver("video", { direction: "recvonly" });
     connection.ontrack = (event) => {
       if (videoRef.current) {
         videoRef.current.srcObject = event.streams[0];
+      }
+      setWebrtcLive(true);
+    };
+    connection.onconnectionstatechange = () => {
+      if (["closed", "disconnected", "failed"].includes(connection.connectionState)) {
+        setWebrtcLive(false);
       }
     };
 
@@ -124,8 +160,19 @@ export function StreamPanel({ selectedDevice, onDeviceChanged }: Props) {
         />
       </div>
 
-      <MjpegViewer message={message} messageType={messageType} streamUrl={streamUrl} />
-      <WebRTCViewer videoRef={videoRef} />
+      <MjpegViewer
+        cameraId={selectedDevice?.id ?? null}
+        fps={dashboard?.fps ?? null}
+        message={message}
+        messageType={messageType}
+        streamUrl={streamUrl}
+      />
+      <WebRTCViewer
+        cameraId={selectedDevice?.id ?? null}
+        fps={dashboard?.fps ?? null}
+        live={webrtcLive}
+        videoRef={videoRef}
+      />
     </section>
   );
 }

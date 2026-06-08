@@ -10,6 +10,8 @@ interface Props {
 
 export function EventFeed({ selectedDevice }: Props) {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -22,9 +24,14 @@ export function EventFeed({ selectedDevice }: Props) {
 
       try {
         const data = await api.events(selectedDevice.id);
-        if (!cancelled) setEvents(data);
+        if (!cancelled) {
+          setEvents(data);
+          setError(null);
+        }
       } catch {
-        if (!cancelled) setEvents([]);
+        if (!cancelled) {
+          setEvents([]);
+        }
       }
     }
 
@@ -36,12 +43,35 @@ export function EventFeed({ selectedDevice }: Props) {
     };
   }, [selectedDevice]);
 
+  async function clearEvents() {
+    if (!isVideoDevice(selectedDevice) || events.length === 0) return;
+    if (!window.confirm(`Clear event feed for ${selectedDevice.name}?`)) return;
+
+    try {
+      setClearing(true);
+      await api.deleteEvents(selectedDevice.id);
+      setEvents([]);
+      setError(null);
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : "Failed to clear event feed.");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   return (
     <section className="panel">
       <div className="section-header">
         <h2>Event Feed</h2>
-        <span className="meta">{events.length} recent</span>
+        <div className="actions">
+          <span className="meta">{events.length} recent</span>
+          <button type="button" disabled={clearing || events.length === 0} onClick={clearEvents}>
+            {clearing ? "Clearing..." : "Clear"}
+          </button>
+        </div>
       </div>
+
+      {error && <div className="notice error">{error}</div>}
 
       <div className="event-list">
         {events.length === 0 && <div className="empty">No events yet</div>}

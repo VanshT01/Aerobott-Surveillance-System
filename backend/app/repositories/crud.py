@@ -180,6 +180,19 @@ def get_events(db: Session, camera_id: int | None = None, limit: int = 50):
     return query.order_by(models.Event.time.desc()).limit(limit).all()
 
 
+def delete_events(db: Session, camera_id: int | None = None):
+    query = db.query(models.Event)
+
+    if camera_id is not None:
+        query = query.filter(models.Event.camera_id == camera_id)
+
+    count = query.count()
+    query.delete()
+    db.commit()
+
+    return count
+
+
 def get_event(db: Session, event_id: int):
     return db.query(models.Event).filter(models.Event.id == event_id).first()
 
@@ -281,6 +294,19 @@ def get_security_events(
         query = query.filter(models.SecurityEvent.device_id == device_id)
 
     return query.order_by(models.SecurityEvent.created_at.desc()).limit(limit).all()
+
+
+def delete_security_events(db: Session, device_id: int | None = None):
+    query = db.query(models.SecurityEvent)
+
+    if device_id is not None:
+        query = query.filter(models.SecurityEvent.device_id == device_id)
+
+    count = query.count()
+    query.delete()
+    db.commit()
+
+    return count
 
 
 def create_security_event(

@@ -44,6 +44,11 @@ export const api = {
   startRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/start`, { method: "POST" }),
   stopRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/stop`, { method: "POST" }),
   events: (cameraId: number, limit = 20) => request<EventItem[]>(`/events?camera_id=${cameraId}&limit=${limit}`),
+  deleteEvents: (cameraId?: number) =>
+    request<{ message: string; deleted_count: number }>(
+      `/events${cameraId === undefined ? "" : `?camera_id=${cameraId}`}`,
+      { method: "DELETE" }
+    ),
   listGeofences: () => request<Geofence[]>("/geofences"),
   createGeofence: (payload: GeofencePayload) =>
     request<Geofence>("/geofences", { method: "POST", body: JSON.stringify(payload) }),
@@ -51,6 +56,11 @@ export const api = {
     request<Geofence>(`/geofences/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteGeofence: (id: number) => request<{ message: string }>(`/geofences/${id}`, { method: "DELETE" }),
   securityEvents: (limit = 20) => request<SecurityEvent[]>(`/security-events?limit=${limit}`),
+  deleteSecurityEvents: (deviceId?: number) =>
+    request<{ message: string; deleted_count: number }>(
+      `/security-events${deviceId === undefined ? "" : `?device_id=${deviceId}`}`,
+      { method: "DELETE" }
+    ),
   webrtcOffer: (id: number, offer: RTCSessionDescriptionInit) =>
     request<WebRTCAnswer>(`/devices/${id}/webrtc`, { method: "POST", body: JSON.stringify(offer) })
 };

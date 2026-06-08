@@ -405,6 +405,16 @@ def list_events(
     return crud.get_events(db, camera_id, limit)
 
 
+@app.delete("/events")
+def delete_events(camera_id: int | None = None, db: Session = Depends(get_db)):
+    deleted_count = crud.delete_events(db, camera_id)
+
+    return {
+        "message": "Events deleted",
+        "deleted_count": deleted_count
+    }
+
+
 @app.get("/events/{event_id}/snapshot")
 def get_event_snapshot(event_id: int, db: Session = Depends(get_db)):
     event = crud.get_event(db, event_id)
@@ -509,6 +519,16 @@ def list_security_events(
     db: Session = Depends(get_db)
 ):
     return crud.get_security_events(db, device_id, limit)
+
+
+@app.delete("/security-events")
+def delete_security_events(device_id: int | None = None, db: Session = Depends(get_db)):
+    deleted_count = crud.delete_security_events(db, device_id)
+
+    return {
+        "message": "Security alerts deleted",
+        "deleted_count": deleted_count
+    }
 
 
 @app.get("/recordings/{recording_id}/download")
