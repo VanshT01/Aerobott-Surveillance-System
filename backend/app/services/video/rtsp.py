@@ -5,6 +5,10 @@ from app.services.vision.detection import get_object_tracker
 from app.services.events.detection_events import create_detection_events
 import time
 
+LOCAL_WEBCAM_TARGET_FPS = 30.0
+LOCAL_WEBCAM_TARGET_WIDTH = 640
+LOCAL_WEBCAM_TARGET_HEIGHT = 480
+
 
 def get_video_source(rtsp_url: str):
     if rtsp_url is None:
@@ -18,13 +22,38 @@ def get_video_source(rtsp_url: str):
     return source
 
 
+def is_local_webcam_source(source) -> bool:
+    return isinstance(source, int)
+
+
+def open_video_capture(source):
+    cap = cv2.VideoCapture(source)
+
+    if is_local_webcam_source(source):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, LOCAL_WEBCAM_TARGET_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, LOCAL_WEBCAM_TARGET_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, LOCAL_WEBCAM_TARGET_FPS)
+
+    return cap
+
+
+def normalize_stream_fps(source, fps: float):
+    if is_local_webcam_source(source):
+        return LOCAL_WEBCAM_TARGET_FPS
+
+    if fps <= 0 or fps > 120:
+        return None
+
+    return fps
+
+
 def check_rtsp_stream(rtsp_url: str) -> bool:
     source = get_video_source(rtsp_url)
 
     if source is None:
         return False
 
-    cap = cv2.VideoCapture(source)
+    cap = open_video_capture(source)
 
     if not cap.isOpened():
         cap.release()
@@ -48,7 +77,7 @@ def get_stream_info(rtsp_url: str):
             "fps": None
         }
 
-    cap = cv2.VideoCapture(source)
+    cap = open_video_capture(source)
 
     if not cap.isOpened():
         cap.release()
@@ -61,7 +90,7 @@ def get_stream_info(rtsp_url: str):
 
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps = normalize_stream_fps(source, cap.get(cv2.CAP_PROP_FPS))
 
     cap.release()
 
@@ -107,7 +136,7 @@ def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
     if source is None:
         return
 
-    cap = cv2.VideoCapture(source)
+    cap = open_video_capture(source)
     tracker = get_object_tracker(rtsp_url)
 
     while True:
@@ -116,8 +145,9 @@ def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
         if not success:
             break
 
+        raw_frame = frame.copy()
         frame, detections = tracker.track_objects(frame)
-        create_detection_events(camera_id, detections, frame)
+        create_detection_events(camera_id, detections, frame, raw_frame=raw_frame)
         success, buffer = cv2.imencode(".jpg", frame)
 
         if not success:

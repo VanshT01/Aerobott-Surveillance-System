@@ -24,6 +24,10 @@ from app.services.video.recording import start_recording, stop_recording, is_rec
 from app.services.telemetry.mqtt import get_mqtt_config, start_mqtt_listener
 from app.services.geofencing.monitor import monitor_geofence_alerts
 from app.services.vision.drone_crowd_counting import estimate_crowd, get_model_status
+from app.services.vision.license_plate_detection import (
+    detect_license_plates,
+    get_model_status as get_license_plate_model_status,
+)
 import os
 
 app = FastAPI(
@@ -355,6 +359,11 @@ def drone_crowd_model_status():
     return get_model_status()
 
 
+@app.get("/license-plate-detector/model/status")
+def license_plate_model_status():
+    return get_license_plate_model_status()
+
+
 @app.post("/devices/{device_id}/drone-crowd-count", response_model=schemas.DroneCrowdCountResponse)
 def run_device_drone_crowd_count(device_id: int, db: Session = Depends(get_db)):
     device = crud.get_device(db, device_id)
@@ -387,6 +396,52 @@ def run_device_drone_crowd_count(device_id: int, db: Session = Depends(get_db)):
 
     try:
         result = estimate_crowd(frame)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error))
+
+    return {
+        "device_id": device.id,
+        **result
+    }
+
+
+@app.post("/devices/{device_id}/license-plates", response_model=schemas.LicensePlateDetectionResponse)
+def run_device_license_plate_detection(
+    device_id: int,
+    confidence: float = 0.25,
+    read_text: bool = False,
+    db: Session = Depends(get_db)
+):
+    device = crud.get_device(db, device_id)
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if device.device_type not in [models.DeviceType.camera, models.DeviceType.drone]:
+        raise HTTPException(status_code=400, detail="Device is not a camera or drone")
+
+    if not device.rtsp_url:
+        raise HTTPException(status_code=400, detail="Device does not have a video source")
+
+    source = get_video_source(device.rtsp_url)
+
+    if source is None:
+        raise HTTPException(status_code=400, detail="Device does not have a video source")
+
+    cap = cv2.VideoCapture(source)
+
+    if not cap.isOpened():
+        cap.release()
+        raise HTTPException(status_code=503, detail="Video stream is unavailable")
+
+    success, frame = cap.read()
+    cap.release()
+
+    if not success:
+        raise HTTPException(status_code=503, detail="Could not read video frame")
+
+    try:
+        result = detect_license_plates(frame, confidence=confidence, read_text=read_text)
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error))
 

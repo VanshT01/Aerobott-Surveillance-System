@@ -8,9 +8,11 @@ cffi==2.0.0
 click==8.4.1
 cryptography==48.0.0
 dnspython==2.8.0
+easyocr
 fastapi==0.136.3
 google-crc32c==1.8.0
 h11==0.16.0
+h5py
 idna==3.17
 ifaddr==0.2.0
 lap==0.5.12
@@ -25,6 +27,8 @@ pyee==13.0.1
 pylibsrtp==1.0.0
 pyOpenSSL==26.2.0
 python-dotenv==1.2.2
+Pillow
+scipy
 SQLAlchemy==2.0.50
 starlette==1.2.0
 torch

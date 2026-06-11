@@ -1,5 +1,6 @@
 import type {
   CameraDashboard,
+  CrowdCountResult,
   Device,
   DevicePayload,
   EventItem,
@@ -43,6 +44,8 @@ export const api = {
   recordingStatus: (id: number) => request<RecordingStatus>(`/devices/${id}/recording/status`),
   startRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/start`, { method: "POST" }),
   stopRecording: (id: number) => request<{ message: string }>(`/devices/${id}/recording/stop`, { method: "POST" }),
+  crowdCount: (id: number) =>
+    request<CrowdCountResult>(`/devices/${id}/drone-crowd-count`, { method: "POST" }),
   events: (cameraId: number, limit = 20) => request<EventItem[]>(`/events?camera_id=${cameraId}&limit=${limit}`),
   deleteEvents: (cameraId?: number) =>
     request<{ message: string; deleted_count: number }>(

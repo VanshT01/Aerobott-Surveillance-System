@@ -1,5 +1,5 @@
 # control the api data
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from app.db.models import DeviceType, DeviceStatus
@@ -112,6 +112,24 @@ class GPSLocationResponse(BaseModel):
 class DroneCrowdCountResponse(BaseModel):
     device_id: int
     count: float
+    model_name: str
+    model_path: str
+    runtime_device: str
+
+
+class LicensePlateDetection(BaseModel):
+    class_: str = Field(alias="class")
+    confidence: float
+    box: list[int]
+    text: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class LicensePlateDetectionResponse(BaseModel):
+    device_id: int
+    detections: list[LicensePlateDetection]
     model_name: str
     model_path: str
     runtime_device: str

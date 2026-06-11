@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.db.session import SessionLocal
-from app.services.video.rtsp import get_video_source
+from app.services.video.rtsp import (
+    LOCAL_WEBCAM_TARGET_FPS,
+    get_video_source,
+    is_local_webcam_source,
+    open_video_capture,
+)
 from app.services.vision.detection import get_object_tracker
 from app.services.events.detection_events import create_detection_events
 from app.repositories import crud
@@ -70,7 +75,7 @@ class CameraRecorder:
         return frame
 
     def record_one_chunk(self):
-        cap = cv2.VideoCapture(self.source)
+        cap = open_video_capture(self.source)
 
         if not cap.isOpened():
             print(f"Camera {self.camera_id}: could not open stream")
@@ -82,7 +87,9 @@ class CameraRecorder:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        if fps <= 0 or fps > 120:
+        if is_local_webcam_source(self.source):
+            fps = LOCAL_WEBCAM_TARGET_FPS
+        elif fps <= 0 or fps > 120:
             fps = 20.0
 
         if width == 0 or height == 0:
@@ -127,8 +134,9 @@ class CameraRecorder:
                 break
 
             frame = cv2.resize(frame, (width, height))
+            raw_frame = frame.copy()
             frame, detections = self.tracker.track_objects(frame)
-            create_detection_events(self.camera_id, detections, frame)
+            create_detection_events(self.camera_id, detections, frame, raw_frame=raw_frame)
             frame = self.draw_overlay(frame, fps)
 
             writer.write(frame)

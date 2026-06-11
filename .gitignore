@@ -10,9 +10,14 @@ backend/events/
 backend/models/*.pth
 backend/models/*.pt
 backend/models/*.ckpt
+!backend/models/license_plate_detector.pt
+backend/models/csrnet_data/
+backend/models/easyocr/
+backend/models/torch_cache/
 
 data/
 DLR_AerialCrowdDataset/
+ShanghaiTech_Crowd_Counting_Dataset/
 runs/
 
 frontend/node_modules/

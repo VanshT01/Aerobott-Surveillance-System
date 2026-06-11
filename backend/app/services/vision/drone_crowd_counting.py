@@ -6,14 +6,14 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
-from torchvision import models
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_MODEL_PATH = BACKEND_DIR / "models" / "csrnet_drone.pth"
+DEFAULT_MODEL_PATH = BACKEND_DIR / "models" / "csrnet_shanghaitech_part_B.pth"
 MODEL_PATH = Path(os.getenv("DRONE_CROWD_MODEL_PATH", DEFAULT_MODEL_PATH))
-MODEL_NAME = "Drone CSRNet"
-INPUT_SIZE = (512, 512)
+MODEL_NAME = "CSRNet ShanghaiTech"
+IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _model = None
@@ -22,25 +22,15 @@ _model_lock = Lock()
 
 
 class CSRNet(nn.Module):
-    """CSRNet architecture from Mehak2005si/Drone-CrowdCounting."""
+    """CSRNet architecture from leeyeehoo/CSRNet-pytorch."""
 
     def __init__(self):
         super().__init__()
-        self.frontend = models.vgg16(weights=None).features[:23]
-        self.backend = nn.Sequential(
-            nn.Conv2d(512, 512, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 512, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(512, 256, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 128, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 64, kernel_size=3, padding=2, dilation=2),
-            nn.ReLU(inplace=True),
-        )
+        frontend_feat = [64, 64, "M", 128, 128, "M", 256, 256, 256, "M", 512, 512, 512]
+        backend_feat = [512, 512, 512, 256, 128, 64]
+
+        self.frontend = make_layers(frontend_feat)
+        self.backend = make_layers(backend_feat, in_channels=512, dilation=True)
         self.output_layer = nn.Conv2d(64, 1, kernel_size=1)
         self._initialize_weights()
 
@@ -49,13 +39,51 @@ class CSRNet(nn.Module):
         x = self.backend(x)
         return self.output_layer(x)
 
-    def _initialize_weights(self):
-        for module in [self.backend, self.output_layer]:
-            for layer in module.modules():
-                if isinstance(layer, nn.Conv2d):
-                    nn.init.normal_(layer.weight, std=0.01)
-                    if layer.bias is not None:
-                        nn.init.constant_(layer.bias, 0)
+    def _initialize_weights(self):  # pragma: no cover - deterministic shape init only
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.normal_(layer.weight, std=0.01)
+                if layer.bias is not None:
+                    nn.init.constant_(layer.bias, 0)
+
+
+def make_layers(cfg, in_channels=3, dilation=False):
+    dilation_rate = 2 if dilation else 1
+    layers = []
+
+    for item in cfg:
+        if item == "M":
+            layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            continue
+
+        layers.extend(
+            [
+                nn.Conv2d(
+                    in_channels,
+                    item,
+                    kernel_size=3,
+                    padding=dilation_rate,
+                    dilation=dilation_rate,
+                ),
+                nn.ReLU(inplace=True),
+            ]
+        )
+        in_channels = item
+
+    return nn.Sequential(*layers)
+
+
+def _extract_state_dict(checkpoint):
+    state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
+
+    if not isinstance(state_dict, dict):
+        raise ValueError("Checkpoint does not contain a PyTorch state_dict")
+
+    return {
+        key.removeprefix("module."): value
+        for key, value in state_dict.items()
+        if isinstance(value, torch.Tensor)
+    }
 
 
 def _load_model():
@@ -74,8 +102,8 @@ def _load_model():
 
         try:
             model = CSRNet().to(_device)
-            state_dict = torch.load(MODEL_PATH, map_location=_device)
-            model.load_state_dict(state_dict)
+            checkpoint = torch.load(MODEL_PATH, map_location=_device, weights_only=False)
+            model.load_state_dict(_extract_state_dict(checkpoint))
             model.eval()
             _model = model
             _model_error = None
@@ -106,9 +134,9 @@ def estimate_crowd(frame):
         raise RuntimeError(_model_error or "Drone crowd model is not configured")
 
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    resized = cv2.resize(rgb_frame, INPUT_SIZE)
-    image = resized.astype(np.float32) / 255.0
+    image = rgb_frame.astype(np.float32) / 255.0
     tensor = torch.tensor(image).permute(2, 0, 1).unsqueeze(0).to(_device)
+    tensor = (tensor - IMAGENET_MEAN.to(_device)) / IMAGENET_STD.to(_device)
 
     with torch.no_grad():
         density = model(tensor)

@@ -3,7 +3,7 @@ import av
 import numpy as np
 from aiortc import VideoStreamTrack
 
-from app.services.video.rtsp import get_video_source
+from app.services.video.rtsp import get_video_source, open_video_capture
 from app.services.vision.detection import get_object_tracker
 from app.services.events.detection_events import create_detection_events
 
@@ -14,7 +14,7 @@ class CameraVideoTrack(VideoStreamTrack):
         self.camera_id = camera_id
         self.rtsp_url = rtsp_url
         self.source = get_video_source(rtsp_url)
-        self.cap = cv2.VideoCapture(self.source)
+        self.cap = open_video_capture(self.source)
         self.tracker = get_object_tracker(rtsp_url)
 
     async def recv(self):
@@ -25,8 +25,9 @@ class CameraVideoTrack(VideoStreamTrack):
         if not success:
             frame = 255 * np.ones((480, 640, 3), dtype=np.uint8)
         else:
+            raw_frame = frame.copy()
             frame, detections = self.tracker.track_objects(frame)
-            create_detection_events(self.camera_id, detections, frame)
+            create_detection_events(self.camera_id, detections, frame, raw_frame=raw_frame)
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 

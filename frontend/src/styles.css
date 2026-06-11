@@ -337,7 +337,7 @@ h3 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   padding: 0;
@@ -352,6 +352,23 @@ h3 {
   min-height: 82px;
   background: #111821;
   padding: 15px;
+}
+
+.metrics .metric-action {
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+}
+
+.metrics .metric-action button {
+  width: 100%;
+}
+
+.metrics .metric-message {
+  grid-column: 1 / -1;
+  min-height: 0;
+  padding: 10px 15px;
+  font-size: 0.9rem;
 }
 
 .metrics strong {

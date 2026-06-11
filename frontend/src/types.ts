@@ -42,6 +42,14 @@ export interface RecordingStatus {
   recording: boolean;
 }
 
+export interface CrowdCountResult {
+  device_id: number;
+  count: number;
+  model_name: string;
+  model_path: string;
+  runtime_device: string;
+}
+
 export interface EventItem {
   id: number;
   camera_id: number;

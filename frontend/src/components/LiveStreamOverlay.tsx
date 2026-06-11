@@ -17,7 +17,7 @@ function formatOverlayTime(date: Date): string {
 }
 
 function normalizeFps(fps: number | null): number {
-  if (fps === null || fps <= 0 || fps > 120) return 20.0;
+  if (fps === null || fps <= 0 || fps > 120) return 30.0;
   return fps;
 }
 

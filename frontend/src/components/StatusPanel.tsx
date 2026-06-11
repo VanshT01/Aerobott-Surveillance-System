@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { isVideoDevice } from "../lib/devices";
 import { formatValue } from "../lib/format";
-import type { CameraDashboard, Device, RecordingStatus } from "../types";
+import type { CameraDashboard, CrowdCountResult, Device, RecordingStatus } from "../types";
 
 interface Props {
   selectedDevice: Device | null;
@@ -11,6 +11,9 @@ interface Props {
 export function StatusPanel({ selectedDevice }: Props) {
   const [dashboard, setDashboard] = useState<CameraDashboard | null>(null);
   const [recording, setRecording] = useState<RecordingStatus | null>(null);
+  const [crowdCount, setCrowdCount] = useState<CrowdCountResult | null>(null);
+  const [crowdCountError, setCrowdCountError] = useState<string | null>(null);
+  const [crowdCountLoading, setCrowdCountLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,6 +22,8 @@ export function StatusPanel({ selectedDevice }: Props) {
       if (!isVideoDevice(selectedDevice)) {
         setDashboard(null);
         setRecording(null);
+        setCrowdCount(null);
+        setCrowdCountError(null);
         return;
       }
 
@@ -48,6 +53,27 @@ export function StatusPanel({ selectedDevice }: Props) {
     };
   }, [selectedDevice]);
 
+  useEffect(() => {
+    setCrowdCount(null);
+    setCrowdCountError(null);
+    setCrowdCountLoading(false);
+  }, [selectedDevice?.id]);
+
+  async function runCrowdCount() {
+    if (!isVideoDevice(selectedDevice) || crowdCountLoading) return;
+
+    try {
+      setCrowdCountLoading(true);
+      setCrowdCountError(null);
+      setCrowdCount(await api.crowdCount(selectedDevice.id));
+    } catch (error) {
+      setCrowdCount(null);
+      setCrowdCountError(error instanceof Error ? error.message : "Crowd count failed.");
+    } finally {
+      setCrowdCountLoading(false);
+    }
+  }
+
   const status = dashboard?.status ?? selectedDevice?.status ?? "unknown";
 
   return (
@@ -70,6 +96,17 @@ export function StatusPanel({ selectedDevice }: Props) {
         <span>FPS</span>
         <strong>{formatValue(dashboard?.fps)}</strong>
       </div>
+      <div className="metric-action">
+        <span>Crowd Count</span>
+        <button type="button" disabled={!isVideoDevice(selectedDevice) || crowdCountLoading} onClick={runCrowdCount}>
+          {crowdCountLoading ? "Counting..." : "Estimate"}
+        </button>
+      </div>
+      <div>
+        <span>Predicted Count</span>
+        <strong>{crowdCount ? Math.max(0, Math.round(crowdCount.count)).toString() : "N/A"}</strong>
+      </div>
+      {crowdCountError && <div className="metric-message negative">{crowdCountError}</div>}
     </section>
   );
 }

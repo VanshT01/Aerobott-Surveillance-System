@@ -1,6 +1,11 @@
-from ultralytics import YOLO
+import os
+import tempfile
 from pathlib import Path
 import threading
+
+os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "matplotlib"))
+
+from ultralytics import YOLO
 import cv2
 
 MODEL_PATH = Path(__file__).resolve().parents[3] / "yolo11n.pt"
