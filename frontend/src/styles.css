@@ -417,19 +417,22 @@ h3 {
 
 .stream-stage {
   position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #263241;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
+    #05070a;
 }
 
 .video-frame,
 video {
   display: block;
   width: 100%;
-  min-height: 360px;
-  max-height: 560px;
-  border: 1px solid #263241;
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
-    #05070a;
+  height: 100%;
   object-fit: contain;
 }
 
@@ -588,9 +591,8 @@ video {
     grid-template-columns: 1fr;
   }
 
-  .video-frame,
-  video {
-    min-height: 240px;
+  .stream-stage {
+    aspect-ratio: 16 / 9;
   }
 
   .stream-overlay {

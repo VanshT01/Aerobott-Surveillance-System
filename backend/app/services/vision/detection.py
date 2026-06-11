@@ -23,6 +23,34 @@ TARGET_CLASSES = {
 }
 
 
+def draw_detection_boxes(frame, detections):
+    for detection in detections:
+        x1, y1, x2, y2 = detection["box"]
+        class_name = detection["class"]
+        confidence = detection["confidence"]
+        tracking_id = detection.get("tracking_id")
+        display_name = class_name.replace("_", " ").title()
+
+        if tracking_id is not None:
+            label = f"{display_name} #{tracking_id} {confidence:.2f}"
+        else:
+            label = f"{display_name} {confidence:.2f}"
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        cv2.putText(
+            frame,
+            label,
+            (x1, max(y1 - 10, 20)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2
+        )
+
+    return frame
+
+
 def draw_detections(frame, results):
     detections = []
 
@@ -47,26 +75,7 @@ def draw_detections(frame, results):
             "tracking_id": tracking_id
         })
 
-        display_name = class_name.replace("_", " ").title()
-
-        if tracking_id is not None:
-            label = f"{display_name} #{tracking_id} {confidence:.2f}"
-        else:
-            label = f"{display_name} {confidence:.2f}"
-
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-        cv2.putText(
-            frame,
-            label,
-            (x1, max(y1 - 10, 20)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2
-        )
-
-    return frame, detections
+    return draw_detection_boxes(frame, detections), detections
 
 
 def detect_objects(frame):

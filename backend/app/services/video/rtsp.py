@@ -1,13 +1,15 @@
 import cv2
 from app.db.session import SessionLocal
 from app.db.models import Device, DeviceType, DeviceStatus
-from app.services.vision.detection import get_object_tracker
+from app.services.vision.detection import draw_detection_boxes, get_object_tracker
 from app.services.events.detection_events import create_detection_events
 import time
 
 LOCAL_WEBCAM_TARGET_FPS = 30.0
-LOCAL_WEBCAM_TARGET_WIDTH = 640
-LOCAL_WEBCAM_TARGET_HEIGHT = 480
+LOCAL_WEBCAM_TARGET_WIDTH = 1280
+LOCAL_WEBCAM_TARGET_HEIGHT = 720
+LIVE_DETECTION_INTERVAL_SECONDS = 0.0
+MAX_CONSECUTIVE_READ_FAILURES = 30
 
 
 def get_video_source(rtsp_url: str):
@@ -53,6 +55,9 @@ def check_rtsp_stream(rtsp_url: str) -> bool:
     if source is None:
         return False
 
+    if is_local_webcam_source(source):
+        return True
+
     cap = open_video_capture(source)
 
     if not cap.isOpened():
@@ -75,6 +80,14 @@ def get_stream_info(rtsp_url: str):
             "width": None,
             "height": None,
             "fps": None
+        }
+
+    if is_local_webcam_source(source):
+        return {
+            "is_opened": True,
+            "width": LOCAL_WEBCAM_TARGET_WIDTH,
+            "height": LOCAL_WEBCAM_TARGET_HEIGHT,
+            "fps": LOCAL_WEBCAM_TARGET_FPS
         }
 
     cap = open_video_capture(source)
@@ -138,17 +151,35 @@ def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
 
     cap = open_video_capture(source)
     tracker = get_object_tracker(rtsp_url)
+    last_detection_at = 0.0
+    latest_detections = []
+    consecutive_failures = 0
 
     while True:
         success, frame = cap.read()
 
         if not success:
-            break
+            consecutive_failures += 1
 
-        raw_frame = frame.copy()
-        frame, detections = tracker.track_objects(frame)
-        create_detection_events(camera_id, detections, frame, raw_frame=raw_frame)
-        success, buffer = cv2.imencode(".jpg", frame)
+            if consecutive_failures >= MAX_CONSECUTIVE_READ_FAILURES:
+                break
+
+            time.sleep(0.05)
+            continue
+
+        consecutive_failures = 0
+        now = time.monotonic()
+
+        if now - last_detection_at >= LIVE_DETECTION_INTERVAL_SECONDS:
+            raw_frame = frame.copy()
+            frame, detections = tracker.track_objects(frame)
+            create_detection_events(camera_id, detections, frame, raw_frame=raw_frame)
+            latest_detections = detections
+            last_detection_at = now
+        else:
+            frame = draw_detection_boxes(frame, latest_detections)
+
+        success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
         if not success:
             continue

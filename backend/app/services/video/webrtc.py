@@ -1,10 +1,11 @@
 import cv2
 import av
 import numpy as np
+import time
 from aiortc import VideoStreamTrack
 
-from app.services.video.rtsp import get_video_source, open_video_capture
-from app.services.vision.detection import get_object_tracker
+from app.services.video.rtsp import LIVE_DETECTION_INTERVAL_SECONDS, get_video_source, open_video_capture
+from app.services.vision.detection import draw_detection_boxes, get_object_tracker
 from app.services.events.detection_events import create_detection_events
 
 
@@ -16,6 +17,8 @@ class CameraVideoTrack(VideoStreamTrack):
         self.source = get_video_source(rtsp_url)
         self.cap = open_video_capture(self.source)
         self.tracker = get_object_tracker(rtsp_url)
+        self.last_detection_at = 0.0
+        self.latest_detections = []
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
@@ -25,9 +28,16 @@ class CameraVideoTrack(VideoStreamTrack):
         if not success:
             frame = 255 * np.ones((480, 640, 3), dtype=np.uint8)
         else:
-            raw_frame = frame.copy()
-            frame, detections = self.tracker.track_objects(frame)
-            create_detection_events(self.camera_id, detections, frame, raw_frame=raw_frame)
+            now = time.monotonic()
+
+            if now - self.last_detection_at >= LIVE_DETECTION_INTERVAL_SECONDS:
+                raw_frame = frame.copy()
+                frame, detections = self.tracker.track_objects(frame)
+                create_detection_events(self.camera_id, detections, frame, raw_frame=raw_frame)
+                self.latest_detections = detections
+                self.last_detection_at = now
+            else:
+                frame = draw_detection_boxes(frame, self.latest_detections)
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 

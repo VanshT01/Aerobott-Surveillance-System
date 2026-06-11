@@ -9,7 +9,8 @@ from app.services.video.rtsp import (
     check_rtsp_stream,
     get_stream_info,
     generate_mjpeg_stream,
-    get_video_source
+    get_video_source,
+    open_video_capture
 )
 from app.db import models
 from app.db.models import DeviceStatus
@@ -382,7 +383,7 @@ def run_device_drone_crowd_count(device_id: int, db: Session = Depends(get_db)):
     if source is None:
         raise HTTPException(status_code=400, detail="Device does not have a video source")
 
-    cap = cv2.VideoCapture(source)
+    cap = open_video_capture(source)
 
     if not cap.isOpened():
         cap.release()
@@ -428,7 +429,7 @@ def run_device_license_plate_detection(
     if source is None:
         raise HTTPException(status_code=400, detail="Device does not have a video source")
 
-    cap = cv2.VideoCapture(source)
+    cap = open_video_capture(source)
 
     if not cap.isOpened():
         cap.release()
