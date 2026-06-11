@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 import threading
 import cv2
+from datetime import datetime, time, timezone
 from app.services.video.rtsp import (
     monitor_cameras,
     check_rtsp_stream,
@@ -29,6 +30,7 @@ from app.services.vision.license_plate_detection import (
     detect_license_plates,
     get_model_status as get_license_plate_model_status,
 )
+from app.services.vision.reid import get_reid_status, reset_reid_runtime
 import os
 
 app = FastAPI(
@@ -486,6 +488,88 @@ def get_event_snapshot(event_id: int, db: Session = Depends(get_db)):
         media_type="image/jpeg",
         filename=os.path.basename(event.snapshot)
     )
+
+
+@app.get("/reid/status")
+def reid_status():
+    return get_reid_status()
+
+
+@app.get("/reid/persons", response_model=list[schemas.PersonIdentityResponse])
+def list_reid_persons(limit: int = 50, db: Session = Depends(get_db)):
+    rows = crud.get_person_identities(db, limit)
+
+    return [
+        {
+            "id": identity.id,
+            "label": identity.label,
+            "appearance_count": identity.appearance_count,
+            "created_at": identity.created_at,
+            "updated_at": identity.updated_at,
+            "last_seen": last_seen
+        }
+        for identity, last_seen in rows
+    ]
+
+
+@app.get("/reid/persons/{identity_id}/appearances", response_model=list[schemas.PersonAppearanceResponse])
+def list_reid_appearances(
+    identity_id: int,
+    today: bool = False,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    identity = crud.get_person_identity(db, identity_id)
+
+    if not identity:
+        raise HTTPException(status_code=404, detail="Person identity not found")
+
+    since = None
+
+    if today:
+        now = datetime.now(timezone.utc)
+        since = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+
+    appearances = crud.get_person_appearances(
+        db=db,
+        identity_id=identity_id,
+        since=since,
+        limit=limit
+    )
+
+    return [crud.person_appearance_to_response(appearance) for appearance in appearances]
+
+
+@app.get("/reid/appearances/{appearance_id}/snapshot")
+def get_reid_snapshot(appearance_id: int, db: Session = Depends(get_db)):
+    appearance = (
+        db.query(models.PersonAppearance)
+        .filter(models.PersonAppearance.id == appearance_id)
+        .first()
+    )
+
+    if not appearance:
+        raise HTTPException(status_code=404, detail="Person appearance not found")
+
+    if not os.path.exists(appearance.snapshot):
+        raise HTTPException(status_code=404, detail="Person appearance snapshot missing")
+
+    return FileResponse(
+        appearance.snapshot,
+        media_type="image/jpeg",
+        filename=os.path.basename(appearance.snapshot)
+    )
+
+
+@app.delete("/reid")
+def delete_reid_data(db: Session = Depends(get_db)):
+    deleted = crud.delete_reid_data(db)
+    reset_reid_runtime()
+
+    return {
+        "message": "ReID data deleted",
+        **deleted
+    }
 
 
 @app.get("/mqtt/status")

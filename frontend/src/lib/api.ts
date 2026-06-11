@@ -6,7 +6,10 @@ import type {
   EventItem,
   Geofence,
   GeofencePayload,
+  PersonAppearance,
+  PersonIdentity,
   RecordingStatus,
+  ReIDStatus,
   SecurityEvent,
   WebRTCAnswer
 } from "../types";
@@ -47,6 +50,12 @@ export const api = {
   crowdCount: (id: number) =>
     request<CrowdCountResult>(`/devices/${id}/drone-crowd-count`, { method: "POST" }),
   events: (cameraId: number, limit = 20) => request<EventItem[]>(`/events?camera_id=${cameraId}&limit=${limit}`),
+  reidStatus: () => request<ReIDStatus>("/reid/status"),
+  reidPersons: (limit = 20) => request<PersonIdentity[]>(`/reid/persons?limit=${limit}`),
+  reidAppearances: (identityId: number, today = true, limit = 50) =>
+    request<PersonAppearance[]>(`/reid/persons/${identityId}/appearances?today=${today}&limit=${limit}`),
+  deleteReidData: () =>
+    request<{ message: string; deleted_identities: number; deleted_appearances: number }>("/reid", { method: "DELETE" }),
   deleteEvents: (cameraId?: number) =>
     request<{ message: string; deleted_count: number }>(
       `/events${cameraId === undefined ? "" : `?camera_id=${cameraId}`}`,
@@ -74,4 +83,8 @@ export function liveUrl(deviceId: number): string {
 
 export function eventSnapshotUrl(eventId: number): string {
   return `${API_BASE}/events/${eventId}/snapshot`;
+}
+
+export function reidSnapshotUrl(appearanceId: number): string {
+  return `${API_BASE}/reid/appearances/${appearanceId}/snapshot`;
 }

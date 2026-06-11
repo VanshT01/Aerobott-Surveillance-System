@@ -2,6 +2,7 @@ import cv2
 from app.db.session import SessionLocal
 from app.db.models import Device, DeviceType, DeviceStatus
 from app.services.vision.detection import draw_detection_boxes, get_object_tracker
+from app.services.vision.reid import process_person_detections
 from app.services.events.detection_events import create_detection_events
 import time
 
@@ -174,6 +175,7 @@ def generate_mjpeg_stream(camera_id: int, rtsp_url: str):
             raw_frame = frame.copy()
             frame, detections = tracker.track_objects(frame)
             create_detection_events(camera_id, detections, frame, raw_frame=raw_frame)
+            process_person_detections(camera_id, raw_frame, detections)
             latest_detections = detections
             last_detection_at = now
         else:

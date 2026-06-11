@@ -16,10 +16,12 @@ from app.services.vision.license_plate_detection import (
 
 EVENTS_DIR = Path(__file__).resolve().parents[3] / "events"
 EVENT_COOLDOWN_SECONDS = 30
+TRACK_ABSENCE_RESET_SECONDS = 10
 LICENSE_PLATE_SCAN_COOLDOWN_SECONDS = 5
 LICENSE_PLATE_EVENT_COOLDOWN_SECONDS = 30
 
 last_events = {}
+active_detection_tracks = {}
 events_lock = threading.Lock()
 last_plate_scans = {}
 plate_scan_lock = threading.Lock()
@@ -153,17 +155,26 @@ def create_license_plate_events(camera_id: int, detections: list[dict], raw_fram
 def create_detection_events(camera_id: int, detections: list[dict], frame, raw_frame=None):
     now = datetime.now(timezone.utc)
     schedule_license_plate_scan(camera_id, detections, frame, raw_frame=raw_frame)
+    seen_track_keys = set()
 
     for detection in detections:
         event_type = build_event_type(detection)
+        tracking_id = detection.get("tracking_id")
         key = (
             camera_id,
             event_type,
-            detection.get("tracking_id")
+            tracking_id
         )
 
         with events_lock:
+            if tracking_id is not None:
+                seen_track_keys.add(key)
+                active_detection_tracks[key] = now
+
             last_time = last_events.get(key)
+
+            if tracking_id is not None and last_time:
+                continue
 
             if last_time and (now - last_time).total_seconds() < EVENT_COOLDOWN_SECONDS:
                 continue
@@ -191,3 +202,16 @@ def create_detection_events(camera_id: int, detections: list[dict], frame, raw_f
             )
         finally:
             db.close()
+
+    with events_lock:
+        stale_keys = [
+            key
+            for key, last_seen in active_detection_tracks.items()
+            if key[0] == camera_id
+            and key not in seen_track_keys
+            and (now - last_seen).total_seconds() >= TRACK_ABSENCE_RESET_SECONDS
+        ]
+
+        for key in stale_keys:
+            active_detection_tracks.pop(key, None)
+            last_events.pop(key, None)

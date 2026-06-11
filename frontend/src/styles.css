@@ -519,6 +519,72 @@ video {
   background: #05070a;
 }
 
+.reid-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.reid-person-list,
+.reid-appearance-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reid-person-list button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #263241;
+  border-radius: 8px;
+  background: #101720;
+  color: #e2e8f0;
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.reid-person-list button.selected {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: rgba(20, 83, 45, 0.25);
+}
+
+.reid-person-list span,
+.reid-appearance span {
+  color: #94a3b8;
+  font-size: 0.84rem;
+}
+
+.reid-subhead {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.reid-appearance {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid #263241;
+  border-radius: 8px;
+  background: #101720;
+  padding: 10px;
+}
+
+.reid-appearance img {
+  width: 72px;
+  height: 96px;
+  border: 1px solid #263241;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #05070a;
+}
+
+.reid-appearance span {
+  display: block;
+  margin-top: 4px;
+}
+
 .security-alert {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -619,11 +685,13 @@ video {
   }
 
   .event-item,
-  .security-alert {
+  .security-alert,
+  .reid-appearance {
     grid-template-columns: 1fr;
   }
 
-  .event-item img {
+  .event-item img,
+  .reid-appearance img {
     width: 100%;
     height: 150px;
   }

@@ -8,6 +8,7 @@ import { TrackingMap } from "./components/TrackingMap";
 import { EventFeed } from "./components/EventFeed";
 import { GeofenceManagement } from "./components/GeofenceManagement";
 import { SecurityAlerts } from "./components/SecurityAlerts";
+import { ReIDPanel } from "./components/ReIDPanel";
 
 const STORAGE_KEY = "surveillance_selected_device_id";
 const DEVICE_REFRESH_MS = 3000;
@@ -203,6 +204,7 @@ export function App() {
             events={securityEvents}
             onClear={clearSecurityEvents}
           />
+          <ReIDPanel />
           <EventFeed selectedDevice={selectedDevice} />
         </aside>
       </section>

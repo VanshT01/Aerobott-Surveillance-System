@@ -1,7 +1,9 @@
 # handles the database actions
+import json
 import math
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import models
@@ -79,6 +81,9 @@ def delete_device(db: Session, device_id: int):
     ).delete()
     db.query(models.Event).filter(
         models.Event.camera_id == device_id
+    ).delete()
+    db.query(models.PersonAppearance).filter(
+        models.PersonAppearance.camera_id == device_id
     ).delete()
     db.query(models.GPSLocation).filter(
         models.GPSLocation.device_id == device_id
@@ -197,6 +202,163 @@ def delete_events(db: Session, camera_id: int | None = None):
 
 def get_event(db: Session, event_id: int):
     return db.query(models.Event).filter(models.Event.id == event_id).first()
+
+
+def _encode_json(value):
+    return json.dumps(value, separators=(",", ":"))
+
+
+def _decode_json(value):
+    return json.loads(value)
+
+
+def get_person_identity(db: Session, identity_id: int):
+    return (
+        db.query(models.PersonIdentity)
+        .filter(models.PersonIdentity.id == identity_id)
+        .first()
+    )
+
+
+def get_person_identities(db: Session, limit: int = 50):
+    last_seen = (
+        db.query(
+            models.PersonAppearance.identity_id,
+            func.max(models.PersonAppearance.time).label("last_seen")
+        )
+        .group_by(models.PersonAppearance.identity_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(models.PersonIdentity, last_seen.c.last_seen)
+        .outerjoin(last_seen, models.PersonIdentity.id == last_seen.c.identity_id)
+        .order_by(last_seen.c.last_seen.desc().nullslast(), models.PersonIdentity.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return rows
+
+
+def get_identity_embeddings(db: Session):
+    return db.query(models.PersonIdentity).all()
+
+
+def create_person_identity(db: Session, embedding: list[float]):
+    identity = models.PersonIdentity(
+        label="pending",
+        centroid_embedding=_encode_json(embedding),
+        appearance_count=0
+    )
+
+    db.add(identity)
+    db.flush()
+    identity.label = f"Person {identity.id}"
+    db.commit()
+    db.refresh(identity)
+
+    return identity
+
+
+def update_person_identity_centroid(
+    db: Session,
+    identity: models.PersonIdentity,
+    embedding: list[float]
+):
+    count = max(0, identity.appearance_count)
+    current = _decode_json(identity.centroid_embedding)
+
+    if count == 0:
+        next_centroid = embedding
+    else:
+        next_centroid = [
+            ((current_value * count) + embedding_value) / (count + 1)
+            for current_value, embedding_value in zip(current, embedding)
+        ]
+
+    identity.centroid_embedding = _encode_json(next_centroid)
+    identity.appearance_count = count + 1
+    db.commit()
+    db.refresh(identity)
+
+    return identity
+
+
+def create_person_appearance(
+    db: Session,
+    identity_id: int,
+    camera_id: int,
+    tracking_id: int | None,
+    event_time: datetime,
+    snapshot: str,
+    bbox: list[int],
+    embedding: list[float],
+    similarity: float | None
+):
+    appearance = models.PersonAppearance(
+        identity_id=identity_id,
+        camera_id=camera_id,
+        tracking_id=tracking_id,
+        time=event_time,
+        snapshot=snapshot,
+        bbox=_encode_json(bbox),
+        embedding=_encode_json(embedding),
+        similarity=similarity
+    )
+
+    db.add(appearance)
+    db.commit()
+    db.refresh(appearance)
+
+    return appearance
+
+
+def get_person_appearances(
+    db: Session,
+    identity_id: int | None = None,
+    camera_id: int | None = None,
+    since: datetime | None = None,
+    limit: int = 100
+):
+    query = db.query(models.PersonAppearance)
+
+    if identity_id is not None:
+        query = query.filter(models.PersonAppearance.identity_id == identity_id)
+
+    if camera_id is not None:
+        query = query.filter(models.PersonAppearance.camera_id == camera_id)
+
+    if since is not None:
+        query = query.filter(models.PersonAppearance.time >= since)
+
+    return query.order_by(models.PersonAppearance.time.desc()).limit(limit).all()
+
+
+def person_appearance_to_response(appearance: models.PersonAppearance):
+    return {
+        "id": appearance.id,
+        "identity_id": appearance.identity_id,
+        "camera_id": appearance.camera_id,
+        "tracking_id": appearance.tracking_id,
+        "time": appearance.time,
+        "snapshot": appearance.snapshot,
+        "bbox": _decode_json(appearance.bbox),
+        "similarity": appearance.similarity
+    }
+
+
+def delete_reid_data(db: Session):
+    appearance_count = db.query(models.PersonAppearance).count()
+    identity_count = db.query(models.PersonIdentity).count()
+    db.query(models.PersonAppearance).delete()
+    db.query(models.PersonIdentity).delete()
+    db.commit()
+
+    return {
+        "deleted_identities": identity_count,
+        "deleted_appearances": appearance_count
+    }
 
 
 def store_gps_location(db: Session, device_id: int, latitude: float, longitude: float):

@@ -85,6 +85,32 @@ class Event(Base):
     snapshot = Column(String, nullable=False)
 
 
+class PersonIdentity(Base):
+    __tablename__ = "person_identities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String, nullable=False, unique=True)
+    centroid_embedding = Column(Text, nullable=False)
+    appearance_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class PersonAppearance(Base):
+    __tablename__ = "person_appearances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    identity_id = Column(Integer, ForeignKey("person_identities.id"), nullable=False, index=True)
+    camera_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
+    tracking_id = Column(Integer, nullable=True, index=True)
+    time = Column(DateTime(timezone=True), nullable=False, index=True)
+    snapshot = Column(String, nullable=False)
+    bbox = Column(Text, nullable=False)
+    embedding = Column(Text, nullable=False)
+    similarity = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class GPSLocation(Base):
     __tablename__ = "gps_locations"
 

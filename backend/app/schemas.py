@@ -92,6 +92,29 @@ class EventResponse(BaseModel):
         from_attributes = True
 
 
+class PersonIdentityResponse(BaseModel):
+    id: int
+    label: str
+    appearance_count: int
+    created_at: datetime
+    updated_at: Optional[datetime]
+    last_seen: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PersonAppearanceResponse(BaseModel):
+    id: int
+    identity_id: int
+    camera_id: int
+    tracking_id: Optional[int]
+    time: datetime
+    snapshot: str
+    bbox: list[int]
+    similarity: Optional[float]
+
+
 class GPSLocationCreate(BaseModel):
     device_id: int
     latitude: float

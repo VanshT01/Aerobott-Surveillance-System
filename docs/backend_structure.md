@@ -107,6 +107,37 @@ PYTHONPATH=backend python backend/scripts/train_csrnet_shanghaitech.py \
 Use `--no-vgg-pretrained` if the machine cannot download torchvision's VGG16
 weights before training.
 
+## Person ReID
+
+The backend stores person identities and appearances from YOLO `person`
+detections. Each sampled crop is embedded, matched against existing identities,
+and stored with camera ID, timestamp, bounding box, similarity, and crop
+snapshot.
+
+Endpoints:
+
+```text
+GET /reid/status
+GET /reid/persons
+GET /reid/persons/{identity_id}/appearances?today=true
+GET /reid/appearances/{appearance_id}/snapshot
+```
+
+Runtime settings:
+
+```bash
+REID_MATCH_THRESHOLD=0.82
+REID_FALLBACK_MATCH_THRESHOLD=0.55
+REID_SAMPLE_INTERVAL_SECONDS=3
+REID_TRACK_CACHE_SECONDS=30
+REID_TORCHREID_MODEL=osnet_x1_0
+REID_TORCHREID_MODEL_PATH=/absolute/path/to/osnet_weights.pth
+```
+
+If TorchReID weights are not configured, the system falls back to normalized
+visual histogram embeddings so the API and dashboard remain usable for local
+testing.
+
 ## License Plate Detection
 
 The backend uses the YOLOv8 license plate detector from

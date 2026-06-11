@@ -12,6 +12,7 @@ from app.services.video.rtsp import (
     open_video_capture,
 )
 from app.services.vision.detection import get_object_tracker
+from app.services.vision.reid import process_person_detections
 from app.services.events.detection_events import create_detection_events
 from app.repositories import crud
 
@@ -137,6 +138,7 @@ class CameraRecorder:
             raw_frame = frame.copy()
             frame, detections = self.tracker.track_objects(frame)
             create_detection_events(self.camera_id, detections, frame, raw_frame=raw_frame)
+            process_person_detections(self.camera_id, raw_frame, detections)
             frame = self.draw_overlay(frame, fps)
 
             writer.write(frame)

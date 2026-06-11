@@ -58,6 +58,38 @@ export interface EventItem {
   snapshot: string;
 }
 
+export interface ReIDStatus {
+  embedding_backend: string;
+  torchreid_configured: boolean;
+  torchreid_loaded: boolean;
+  torchreid_error: string | null;
+  match_threshold: number;
+  torchreid_match_threshold: number;
+  fallback_match_threshold: number;
+  sample_interval_seconds: number;
+  track_cache_seconds: number;
+}
+
+export interface PersonIdentity {
+  id: number;
+  label: string;
+  appearance_count: number;
+  created_at: string;
+  updated_at: string | null;
+  last_seen: string | null;
+}
+
+export interface PersonAppearance {
+  id: number;
+  identity_id: number;
+  camera_id: number;
+  tracking_id: number | null;
+  time: string;
+  snapshot: string;
+  bbox: number[];
+  similarity: number | null;
+}
+
 export interface Geofence {
   id: number;
   name: string;
