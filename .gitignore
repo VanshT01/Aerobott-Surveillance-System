@@ -8,6 +8,7 @@ recordings/
 backend/recordings/
 backend/events/
 backend/models/*.pth
+backend/models/*.pth.tar
 backend/models/*.pt
 backend/models/*.ckpt
 !backend/models/license_plate_detector.pt

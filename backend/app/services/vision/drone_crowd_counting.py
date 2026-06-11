@@ -9,9 +9,9 @@ import torch.nn as nn
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_MODEL_PATH = BACKEND_DIR / "models" / "csrnet_shanghaitech_part_B.pth"
+DEFAULT_MODEL_PATH = BACKEND_DIR / "models" / "partBmodel_best.pth.tar"
 MODEL_PATH = Path(os.getenv("DRONE_CROWD_MODEL_PATH", DEFAULT_MODEL_PATH))
-MODEL_NAME = "CSRNet ShanghaiTech"
+MODEL_NAME = "CSRNet Part B Best"
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
 IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 

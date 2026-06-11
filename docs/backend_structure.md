@@ -26,7 +26,7 @@ backend/
 │           ├── drone_crowd_counting.py
 │           └── license_plate_detection.py
 ├── models/
-│   ├── csrnet_drone.pth
+│   ├── partBmodel_best.pth.tar
 │   └── license_plate_detector.pt
 ```
 
@@ -79,16 +79,16 @@ No GPS updates while outside: background watchdog re-alerts at most once every 5
 ## Drone Crowd Counting
 
 The backend uses the CSRNet architecture from `leeyeehoo/CSRNet-pytorch` for
-drone crowd counting. Place a ShanghaiTech-trained checkpoint at:
+drone crowd counting. The deployed checkpoint lives at:
 
 ```text
-backend/models/csrnet_shanghaitech_part_B.pth
+backend/models/partBmodel_best.pth.tar
 ```
 
 or set:
 
 ```bash
-DRONE_CROWD_MODEL_PATH=/absolute/path/to/csrnet_shanghaitech_part_B.pth
+DRONE_CROWD_MODEL_PATH=/absolute/path/to/partBmodel_best.pth.tar
 ```
 
 The dashboard will show the model as missing until that weights file exists.
